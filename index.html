@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<head>
+	<meta charset="utf-8">
+	<title>Twooter</title>
+</head>
+<body>
+	<h1>Twooter</h1>
+	<p>{{.}}</p>
+	{{range $twoot := .Twoots}}
+	<div>	
+		<h2>{{$twoot.Author.Name}}</h2>
+		<p>User ID: {{$twoot.Author.ID}}</p>
+		<p>Color: <span style="color: {{$twoot.Author.Color}}">{{$twoot.Author.Color}}</p>
+		<p>{{$twoot.Body}}</p>
+	</div>
+	{{end}}
+	
+</body>
+</html>
