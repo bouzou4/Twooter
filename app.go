@@ -1,3 +1,4 @@
+//	I apologize in advance for this mess
 package main
 
 import (
@@ -11,8 +12,10 @@ import (
     "crypto/sha1"
 )
 
-// var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
+//	regex to validate url request to be implemented soon(tm) 
+//	var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
+//	basic user struct with list of pointers to their created Twoots
 type User struct {
 	ID int
 	Name string
@@ -28,6 +31,7 @@ type Twoot struct {
 	Created time.Time
 }
 
+//	no files yet so the database is held in memory meaning memory violations are always a hair away
 type FakeDB struct {
 	Users []*User
 	Twoots []*Twoot
@@ -38,21 +42,37 @@ type Instance struct {
 	DB *FakeDB
 }
 
+
+//	adds a user to the database while storing their password as a hash
+//	returns UserID
 func AddUser(name string, pass string, color string, db *FakeDB) int {
 	h := sha1.New()
 	h.Write([]byte(pass))
 	bs := string(h.Sum(nil))
 
 	tempID := len((*db).Users)
-	tempUser := &User{ID: tempID, Name: name, Pass: bs, Color: color, Twoots: []*Twoot{}}
+	tempUser := &User{
+					ID: tempID, 
+					Name: name, 
+					Pass: bs, 
+					Color: color, 
+					Twoots: []*Twoot{},
+				}
 	(*db).Users = append((*db).Users, tempUser)
 	return tempID
 }
 
+//	creates and adds Twoot to the database
+//	returns TwootID
 func AddTwoot(author int, body string, db *FakeDB) int {
 	tempID := len((*db).Twoots)
 	tempAuth := (*db).Users[author]
-	tempTwoot := &Twoot{ID: tempID, Author: tempAuth, Body: body, Created: time.Now()}
+	tempTwoot := &Twoot{
+					ID: tempID, 
+					Author: tempAuth, 
+					Body: body, 
+					Created: time.Now(),
+				}
 	
 	tempTwoots := make([]*Twoot, len((*db).Twoots) + 1)
 	tempTwoots[0] = tempTwoot
@@ -67,13 +87,15 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	return tempID
 }
 
-func SortTwoots(db *FakeDB) {
-	for i,x := range (*db).Twoots {
-		(*x).ID = len((*db).Twoots) - i
+//	resets all IDs in a list of Twoots to their proper order
+func SortTwoots(list *[]*Twoot) {
+	for i,x := range *list {
+		(*x).ID = len(*list) - i
 	}
 	fmt.Println("sorted twoots")
 }
 
+//	Used to remove a Twoot from the DB given it's ID
 func DeleteTwoot(dID int, db *FakeDB) {
 	fmt.Printf("looking for Twoot: dID")
 	for x := range (*db).Twoots {
@@ -84,12 +106,13 @@ func DeleteTwoot(dID int, db *FakeDB) {
 			copy((*db).Twoots[x:], (*db).Twoots[x + 1:])
 			(*db).Twoots[len((*db).Twoots) - 1] = nil
 			(*db).Twoots = (*db).Twoots[:len((*db).Twoots) - 1]
-			SortTwoots(db)
+			SortTwoots(&db.Twoots)
 			break
 		}
 	}
 }
 
+//	function used to check if username and password hash match up
 func login(username string, password string, db *FakeDB) int {
 	for _, usr := range (*db).Users {
 		if (*usr).Name == username {
@@ -103,13 +126,16 @@ func login(username string, password string, db *FakeDB) int {
 	return -1
 }
 
-//closure that returns a function that takes an http.ResponseWriter and http.Request and includes the FakeDB object
+//	closure that returns a function that takes an http.ResponseWriter and http.Request and includes the FakeDB object
 func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *FakeDB), db *FakeDB) http.HandlerFunc {
     return func(w http.ResponseWriter, r *http.Request) {
         fn(w, r, db)
     }
 }
 
+
+//	webhandler for the homepage, if the user is logged in then they get their timeline 
+//	otherwise they get the login page
 func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	if err != nil {
@@ -124,6 +150,7 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	}
 }
 
+//	webhandler for login page performs login() and sets the cookie
 func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	r.ParseForm()
 	cookID := login(r.PostFormValue("username"), r.PostFormValue("password"), db)
@@ -139,13 +166,13 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		tok := http.Cookie {
 			Name: "UserID",
 			Value: "",
-			Expires: time.Now().Add(1 * time.Hour),
 		}
 		http.SetCookie(w, &tok)
 	}
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+//	webhandler for logout; essentially just clears cookie
 func LogoutHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	tok := http.Cookie {
 		Name: "UserID",
@@ -155,6 +182,7 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+//	webhandler for posting Twoots, will not post if text is longer than 100 chars
 func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	switch r.Method {
 	case http.MethodGet:
@@ -176,17 +204,30 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	}
 }
 
+//	webhandler for registering users and detecting if username is already in use
 func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	switch r.Method {
 	case http.MethodGet:
 		RenderFileTemplate(w, "register", db)
 	case http.MethodPost:
 		r.ParseForm()
-		AddUser(r.PostFormValue("username"), r.PostFormValue("password"), r.PostFormValue("color"), db)
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		found := false
+		for _, usr := range (*db).Users {
+			if (*usr).Name == r.PostFormValue("username") {
+				found = true
+				break
+			}
+		}
+		if found {
+			http.Redirect(w, r, "/register", http.StatusTemporaryRedirect)
+		} else {
+			AddUser(r.PostFormValue("username"), r.PostFormValue("password"), r.PostFormValue("color"), db)
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		}
 	}
 }
 
+//	webhandler for Deleting User, also deletes all of their Twoots
 func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	if err != nil {
@@ -213,6 +254,8 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	LogoutHandler(w, r, db)
 }
 
+
+//	webhandler for Deleting Twoot, also resorts their twoots
 func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	if err != nil {
@@ -228,10 +271,12 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	if (*(*(*db).Twoots[len((*db).Twoots) - tID]).Author).ID == authID {
 		fmt.Printf("client owns TwootID: %d\n", tID)
 		DeleteTwoot(tID, db)
+		SortTwoots(&(*(*db).Users[authID]).Twoots)
 	}
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+//	function for sending out template for the client's timeline
 func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	var inst Instance
@@ -276,6 +321,7 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
     }
 }
 
+//	function for sending out specified template given its filename
 func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
@@ -331,5 +377,6 @@ func main() {
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
 	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
 	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
+	
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }
