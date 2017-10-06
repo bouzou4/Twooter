@@ -1,19 +1,17 @@
-<!DOCTYPE html>
-<head>
-	<meta charset="utf-8">
-	<title>Twooter</title>
-</head>
-<body>
-	<h1>Twooter</h1>
-	<p>{{.}}</p>
+<div class="compose-window">
+	<h2>Compose a Twoot:</h2>
+	<form id="compose-form" action="/post" method="POST">
+		<textarea name="twoot" class="twootbox" form="compose-form"></textarea>
+		<input type="submit" value="Post" class="form-button">
+	</form>
+	<a href="/logout">Logout</a>
+</div>
+<div class="twoots-container">
 	{{range $twoot := .Twoots}}
-	<div>	
-		<h2>{{$twoot.Author.Name}}</h2>
-		<p>User ID: {{$twoot.Author.ID}}</p>
-		<p>Color: <span style="color: {{$twoot.Author.Color}}">{{$twoot.Author.Color}}</p>
+	<div class="twoot" style="background-color: {{$twoot.Author.Color}}">	
+		<a href="localhost:8080/user/{{$twoot.Author.ID}}">{{$twoot.Author.Name}}</a>
+		<span class="timestamp">{{$twoot.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot.Body}}</p>
 	</div>
 	{{end}}
-	
-</body>
-</html>
+</div>
