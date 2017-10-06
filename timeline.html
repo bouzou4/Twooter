@@ -1,3 +1,4 @@
+{{$clientid := .Client.ID}}
 <div class="compose-window">
 	<h2>Compose a Twoot:</h2>
 	<form id="compose-form" action="/post" method="POST">
@@ -10,11 +11,14 @@
 	<a href="/delete">Delete Account</a>
 </div>
 <div class="twoots-container">
-	{{range $twoot := .Twoots}}
+	{{range $twoot := .DB.Twoots}}
 	<div class="twoot" style="background-color: {{$twoot.Author.Color}}">	
-		<a href="localhost:8080/user/{{$twoot.Author.ID}}" class="no-anchor">{{$twoot.Author.Name}}</a>
+		<a href="localhost:8080/user/{{$twoot.Author.ID}}" class="author-link no-anchor">{{$twoot.Author.Name}}</a>
 		<span class="timestamp">{{$twoot.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot.Body}}</p>
+		{{if eq $clientid $twoot.Author.ID}}
+		<a href="/tdelete/{{$twoot.ID}}">Delete</a>
+		{{end}}
 	</div>
 	{{end}}
 </div>

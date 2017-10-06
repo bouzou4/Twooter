@@ -33,6 +33,11 @@ type FakeDB struct {
 	Twoots []*Twoot
 }
 
+type Instance struct {
+	Client *User
+	DB *FakeDB
+}
+
 func AddUser(name string, pass string, color string, db *FakeDB) int {
 	h := sha1.New()
 	h.Write([]byte(pass))
@@ -64,12 +69,13 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 
 func SortTwoots(db *FakeDB) {
 	for i,x := range (*db).Twoots {
-		(*x).ID = i
+		(*x).ID = len((*db).Twoots) - i
 	}
 	fmt.Println("sorted twoots")
 }
 
 func DeleteTwoot(dID int, db *FakeDB) {
+	fmt.Printf("looking for Twoot: dID")
 	for x := range (*db).Twoots {
 		if (*(*db).Twoots[x]).ID == dID {
 			fmt.Print("deleting twoot: ")
@@ -108,12 +114,12 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	if err != nil {
 		fmt.Println(err)
-		RenderTemplate(w, "login", db)
+		RenderFileTemplate(w, "login", db)
 	} else {
 		if session.Value == "" {
-			RenderTemplate(w, "login", db)
+			RenderFileTemplate(w, "login", db)
 		} else {
-			RenderTemplate(w, "index", db)
+			RenderTimeline(w, r, db)
 		}
 	}
 }
@@ -173,7 +179,7 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	switch r.Method {
 	case http.MethodGet:
-		RenderTemplate(w, "register", db)
+		RenderFileTemplate(w, "register", db)
 	case http.MethodPost:
 		r.ParseForm()
 		AddUser(r.PostFormValue("username"), r.PostFormValue("password"), r.PostFormValue("color"), db)
@@ -207,7 +213,70 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	LogoutHandler(w, r, db)
 }
 
-func RenderTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
+func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	session, err := r.Cookie("UserID")
+	if err != nil {
+		fmt.Println(err)
+	}
+	authID, err := strconv.Atoi(session.Value)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
+
+	if (*(*(*db).Twoots[len((*db).Twoots) - tID]).Author).ID == authID {
+		fmt.Printf("client owns TwootID: %d\n", tID)
+		DeleteTwoot(tID, db)
+	}
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
+func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	session, err := r.Cookie("UserID")
+	var inst Instance
+	if err != nil {
+		fmt.Println(err)
+		inst = Instance{Client: nil, DB: db}
+	} else {
+		if session.Value == "" {
+			inst = Instance{Client: nil, DB: db}
+		} else {
+			tempID, _ := strconv.Atoi(session.Value)
+			inst = Instance{Client: (*db).Users[tempID], DB: db}
+		}
+	}
+
+	head, err := template.ParseFiles("header.html")
+	if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    content, err := template.ParseFiles("timeline.html")
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    foot, err := template.ParseFiles("footer.html")
+	if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+    }
+    err = head.Execute(w, inst)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
+    err = content.Execute(w, inst)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
+    err = foot.Execute(w, inst)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
+}
+
+func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
         http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -261,5 +330,6 @@ func main() {
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
 	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
+	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }
