@@ -121,21 +121,20 @@ func LogoutHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	switch r.Method {
 	case http.MethodGet:
-		fmt.Println("Compose GET Request")
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	case http.MethodPost:	
 		r.ParseForm()
-		tok, err := r.Cookie("UserID")
-		if err != nil {
-	        http.Error(w, err.Error(), http.StatusInternalServerError)
-	    }
-	    fmt.Println("User: " + tok.Value + " has logged in")
-		author,err := strconv.Atoi(tok.Value)
-		if err != nil {
-	        http.Error(w, err.Error(), http.StatusInternalServerError)
-	    }
-		AddTwoot(author, r.PostFormValue("twoot"), db)
-		fmt.Println("Compose POST Request\nAuthor: " + tok.Value)
+		if len(r.PostFormValue("twoot")) <= 100 {
+			tok, err := r.Cookie("UserID")
+			if err != nil {
+		        http.Error(w, err.Error(), http.StatusInternalServerError)
+		    }
+			author,err := strconv.Atoi(tok.Value)
+			if err != nil {
+		        http.Error(w, err.Error(), http.StatusInternalServerError)
+		    }
+			AddTwoot(author, r.PostFormValue("twoot"), db)
+		}
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	}
 }

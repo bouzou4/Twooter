@@ -1,6 +1,21 @@
 	</div>
 	<script type="text/javascript">
-		
+
+		$('#twootbox').keyup(function(event) {
+			var chars = 100 - $('#twootbox').val().length
+			$('.char-count').text(chars)
+			if (chars >= 0) {
+				$('.char-count').css('color', 'inherit');
+				$('#post-button').show()
+			}
+			else {
+				$('.char-count').css('color', 'red');
+				$('#post-button').hide()
+			}
+		});
+
+		$('.char-count').text(100 - $('#twootbox').val().length)
+
 	</script>
 </body>
 </html>
