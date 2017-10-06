@@ -46,12 +46,42 @@ func AddUser(name string, pass string, color string, db *FakeDB) int {
 
 func AddTwoot(author int, body string, db *FakeDB) int {
 	tempID := len((*db).Twoots)
-	tempTwoot := &Twoot{ID: tempID, Author: (*db).Users[author], Body: body, Created: time.Now()}
+	tempAuth := (*db).Users[author]
+	tempTwoot := &Twoot{ID: tempID, Author: tempAuth, Body: body, Created: time.Now()}
+	
 	tempTwoots := make([]*Twoot, len((*db).Twoots) + 1)
 	tempTwoots[0] = tempTwoot
 	copy(tempTwoots[1:], (*db).Twoots)
 	(*db).Twoots = tempTwoots
+
+	tempTwoots = make([]*Twoot, len((*tempAuth).Twoots) + 1)
+	tempTwoots[0] = tempTwoot
+	copy(tempTwoots[1:], (*tempAuth).Twoots)
+	(*tempAuth).Twoots = tempTwoots
+
 	return tempID
+}
+
+func SortTwoots(db *FakeDB) {
+	for i,x := range (*db).Twoots {
+		(*x).ID = i
+	}
+	fmt.Println("sorted twoots")
+}
+
+func DeleteTwoot(dID int, db *FakeDB) {
+	for x := range (*db).Twoots {
+		if (*(*db).Twoots[x]).ID == dID {
+			fmt.Print("deleting twoot: ")
+			fmt.Print((*(*db).Twoots[x]))
+			fmt.Print("\n")
+			copy((*db).Twoots[x:], (*db).Twoots[x + 1:])
+			(*db).Twoots[len((*db).Twoots) - 1] = nil
+			(*db).Twoots = (*db).Twoots[:len((*db).Twoots) - 1]
+			SortTwoots(db)
+			break
+		}
+	}
 }
 
 func login(username string, password string, db *FakeDB) int {
@@ -78,13 +108,14 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
 	if err != nil {
 		fmt.Println(err)
-	}
-	fmt.Println("Base GET Request\ncookie value: " + session.Value)
-	if session.Value == "" {
 		RenderTemplate(w, "login", db)
 	} else {
-		RenderTemplate(w, "index", db)
-	}	
+		if session.Value == "" {
+			RenderTemplate(w, "login", db)
+		} else {
+			RenderTemplate(w, "index", db)
+		}
+	}
 }
 
 func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
@@ -150,6 +181,32 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	}
 }
 
+func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	session, err := r.Cookie("UserID")
+	if err != nil {
+		fmt.Println(err)
+	}
+	delID, err := strconv.Atoi(session.Value)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	for x := range (*db).Users {
+		if (*(*db).Users[x]).ID == delID {
+			fmt.Printf("deleting user: %s", (*(*db).Users[x]).Name)
+			for _,y := range (*(*db).Users[x]).Twoots {
+				DeleteTwoot((*y).ID, db)
+			}
+			copy((*db).Users[x:], (*db).Users[x + 1:])
+			(*db).Users[len((*db).Users) - 1] = nil
+			(*db).Users = (*db).Users[:len((*db).Users) - 1]
+			break
+		}
+	}
+
+	LogoutHandler(w, r, db)
+}
+
 func RenderTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
@@ -184,7 +241,7 @@ func main() {
 	db := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
 
 	AddUser("Adam", "password", "#fae24a", &db)
-	AddUser("Rick", "password", "#859911", &db)
+	AddUser("Rick", "oo", "#859911", &db)
 	AddUser("Ricardo", "pp", "#a3f5ee", &db)
 
 	AddTwoot(0, "my last name is bouz", &db)
@@ -203,5 +260,6 @@ func main() {
 	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
+	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }
