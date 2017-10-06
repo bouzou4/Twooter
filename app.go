@@ -140,6 +140,17 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	}
 }
 
+func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	switch r.Method {
+	case http.MethodGet:
+		RenderTemplate(w, "register", db)
+	case http.MethodPost:
+		r.ParseForm()
+		AddUser(r.PostFormValue("username"), r.PostFormValue("password"), r.PostFormValue("color"), db)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	}
+}
+
 func RenderTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
@@ -192,5 +203,6 @@ func main() {
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
 	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
+	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }

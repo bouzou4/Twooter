@@ -8,6 +8,11 @@
 			font-weight: 300;
 		}
 
+		a.no-anchor {
+			color: inherit !important;
+			text-decoration: none !important;
+		}
+
 		.scaled-page {
 			max-width: 1440px;
 			padding: 15px 30px;
@@ -85,9 +90,7 @@
 		.twoot a {
 			display: inline-block;
 			width:-webkit-fit-content;
-			color: inherit;
 			font-size: 28px;
-			text-decoration: none;
 			border: 3px solid black;
 			border-radius: 5px;
 			padding: 2px;
@@ -102,4 +105,4 @@
 </head>
 <body>
 	<div class="scaled-page">
-		<h1 class="logo">Twooter</h1>
+		<h1 class="logo"><a href="/" class="no-anchor">Twooter</a></h1>

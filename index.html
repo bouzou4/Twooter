@@ -9,7 +9,7 @@
 <div class="twoots-container">
 	{{range $twoot := .Twoots}}
 	<div class="twoot" style="background-color: {{$twoot.Author.Color}}">	
-		<a href="localhost:8080/user/{{$twoot.Author.ID}}">{{$twoot.Author.Name}}</a>
+		<a href="localhost:8080/user/{{$twoot.Author.ID}}" class="no-anchor">{{$twoot.Author.Name}}</a>
 		<span class="timestamp">{{$twoot.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot.Body}}</p>
 	</div>
