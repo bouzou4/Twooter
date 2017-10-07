@@ -10,14 +10,30 @@
 	<br>
 	<a href="/delete">Delete Account</a>
 </div>
-<div class="twoots-container">
-	{{range $twoot := .DB.Twoots}}
-	<div class="twoot" style="background-color: {{$twoot.Author.Color}}">	
-		<a href="localhost:8080/user/{{$twoot.Author.ID}}" class="author-link no-anchor">{{$twoot.Author.Name}}</a>
-		<span class="timestamp">{{$twoot.Created.Format "Mon Jan 2 06 3:04"}}</span>
-		<p>{{$twoot.Body}}</p>
-		{{if eq $clientid $twoot.Author.ID}}
-		<a href="/tdelete/{{$twoot.ID}}">Delete</a>
+<div id="timeline" class="twoots-container">
+	<h3>Your Timeline</h3>
+	{{range $twoot1 := .Timeline}}
+	<div class="twoot" style="background-color: {{$twoot1.Author.Color}}">	
+		<a href="localhost:8080/user/{{$twoot1.Author.ID}}" class="author-link no-anchor">{{$twoot1.Author.Name}}</a>
+		<a href="/follow/{{$twoot1.Author.ID}}">Follow</a>
+		<span class="timestamp">{{$twoot1.Created.Format "Mon Jan 2 06 3:04"}}</span>
+		<p>{{$twoot1.Body}}</p>
+		{{if eq $clientid $twoot1.Author.ID}}
+		<a href="/tdelete/{{$twoot1.ID}}">Delete</a>
+		{{end}}
+	</div>
+	{{end}}
+</div>
+<div id="new" class="twoots-container">
+	<h3>New Tweets</h3>
+	{{range $twoot2 := .DB.Twoots}}
+	<div class="twoot" style="background-color: {{$twoot2.Author.Color}}">	
+		<a href="localhost:8080/user/{{$twoot2.Author.ID}}" class="author-link no-anchor">{{$twoot2.Author.Name}}</a>
+		<a href="/follow/{{$twoot2.Author.ID}}">Follow</a>
+		<span class="timestamp">{{$twoot2.Created.Format "Mon Jan 2 06 3:04"}}</span>
+		<p>{{$twoot2.Body}}</p>
+		{{if eq $clientid $twoot2.Author.ID}}
+		<a href="/tdelete/{{$twoot2.ID}}">Delete</a>
 		{{end}}
 	</div>
 	{{end}}

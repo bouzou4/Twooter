@@ -21,6 +21,7 @@ type User struct {
 	Name string
 	Pass string
 	Color string
+	FollowList []*User
 	Twoots []*Twoot
 }
 
@@ -39,6 +40,7 @@ type FakeDB struct {
 
 type Instance struct {
 	Client *User
+	Timeline []*Twoot
 	DB *FakeDB
 }
 
@@ -56,6 +58,7 @@ func AddUser(name string, pass string, color string, db *FakeDB) int {
 					Name: name, 
 					Pass: bs, 
 					Color: color, 
+					FollowList: []*User{},
 					Twoots: []*Twoot{},
 				}
 	(*db).Users = append((*db).Users, tempUser)
@@ -85,6 +88,28 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	(*tempAuth).Twoots = tempTwoots
 
 	return tempID
+}
+
+//	gets index of followed account and returns it or -1 if not found
+func TwootIndex(vs []*User, t *User) int {
+    for i, v := range vs {
+        if (*v).ID == (*t).ID {
+            return i
+        }
+    }
+    return -1
+}
+
+//	filters out Twoots in database to find those asked for by follow list
+//	returns list of pointers to them
+func FollowFilter(follows []*User, db *FakeDB) []*Twoot {
+	timeline := []*Twoot{}
+	for _, i := range (*db).Twoots {
+		if TwootIndex(follows, (*i).Author) != -1 {
+			timeline = append(timeline, i)
+		}
+	}
+	return timeline
 }
 
 //	resets all IDs in a list of Twoots to their proper order
@@ -221,10 +246,32 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		if found {
 			http.Redirect(w, r, "/register", http.StatusTemporaryRedirect)
 		} else {
-			AddUser(r.PostFormValue("username"), r.PostFormValue("password"), r.PostFormValue("color"), db)
+			AddUser(
+				r.PostFormValue("username"),
+				r.PostFormValue("password"),
+				r.PostFormValue("color"), 
+				db)
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		}
 	}
+}
+
+//	webhandler for followins a user
+func FollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	session, err := r.Cookie("UserID")
+	if err != nil {
+		fmt.Println(err)
+	}
+	authID, err := strconv.Atoi(session.Value)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	uID,_ := strconv.Atoi(r.URL.Path[len("/follow/"):])
+
+	(*(*db).Users[authID]).FollowList = append((*(*db).Users[authID]).FollowList, (*db).Users[uID])
+
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
 //	webhandler for Deleting User, also deletes all of their Twoots
@@ -288,7 +335,9 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			inst = Instance{Client: nil, DB: db}
 		} else {
 			tempID, _ := strconv.Atoi(session.Value)
-			inst = Instance{Client: (*db).Users[tempID], DB: db}
+			tempUser := (*db).Users[tempID]
+			timeline := FollowFilter((*tempUser).FollowList, db)
+			inst = Instance{Client: tempUser, Timeline: timeline ,DB: db}
 		}
 	}
 
@@ -355,9 +404,9 @@ func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 func main() {
 	db := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
 
-	AddUser("Adam", "password", "#fae24a", &db)
+	AddUser("Adam", "password", "#00afa0", &db)
 	AddUser("Rick", "oo", "#859911", &db)
-	AddUser("Ricardo", "pp", "#a3f5ee", &db)
+	AddUser("Ricardo", "pp", "#359890", &db)
 
 	AddTwoot(0, "my last name is bouz", &db)
 	AddTwoot(0, "what a nice day", &db)
@@ -375,8 +424,9 @@ func main() {
 	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
+	http.HandleFunc("/follow/", MakeDbHandler(FollowHandler, &db))
 	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
 	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
-	
+
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }
