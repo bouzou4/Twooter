@@ -187,14 +187,15 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			Expires: time.Now().Add(1 * time.Hour),
 		}
 		http.SetCookie(w, &tok)
+		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	} else {
 		tok := http.Cookie {
 			Name: "UserID",
 			Value: "",
 		}
 		http.SetCookie(w, &tok)
+		http.Redirect(w, r, "/loginfail", http.StatusTemporaryRedirect)
 	}
-	http.Redirect(w, r, "/loginfail", http.StatusTemporaryRedirect)
 }
 
 //	webhandler for displaying the failed login page; redirects after 5 seconds
