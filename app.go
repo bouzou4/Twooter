@@ -22,6 +22,7 @@ type User struct {
 	Pass string
 	Color string
 	FollowList []*User
+	FollowedList []*User
 	Twoots []*Twoot
 }
 
@@ -90,6 +91,11 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	return tempID
 }
 
+func Follow(user int, following int, db *FakeDB) {
+	db.Users[user].FollowList = append(db.Users[user].FollowList, db.Users[following])
+	db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
+}
+
 //	gets index of followed account and returns it or -1 if not found
 func TwootIndex(vs []*User, t *User) int {
     for i, v := range vs {
@@ -137,16 +143,41 @@ func DeleteTwoot(dID int, db *FakeDB) {
 	}
 }
 
-//	function used to check if username and password hash match up
-func login(username string, password string, db *FakeDB) int {
-	for _, usr := range (*db).Users {
-		if (*usr).Name == username {
-			h := sha1.New()
-			h.Write([]byte(password))
-			if string(h.Sum(nil)) == (*usr).Pass {
-				return (*usr).ID
+//	Used to remove a User from the DB given their ID
+func DeleteUser(delID int, db *FakeDB) {
+	for x := range (*db).Users {
+		if (*(*db).Users[x]).ID == delID {
+			fmt.Printf("deleting user: %s\n", (*(*db).Users[x]).Name)
+			for _,y := range (*(*db).Users[x]).Twoots {
+				DeleteTwoot((*y).ID, db)
 			}
+			copy((*db).Users[x:], (*db).Users[x + 1:])
+			(*db).Users[len((*db).Users) - 1] = nil
+			(*db).Users = (*db).Users[:len((*db).Users) - 1]
+			break
 		}
+	}
+}
+
+//	function used to get userID from Username
+//	returns -1 if not found
+func GetID(username string, db *FakeDB) int {
+	for _, usr := range db.Users {
+		if usr.Name == username {
+			return usr.ID
+		}
+	}
+	return -1
+}
+
+//	function used to check if username and password hash match up
+//	returns -1 if credentials are invalid
+func login(username string, password string, db *FakeDB) int {
+	uID := GetID(username, db)
+	h := sha1.New()
+	h.Write([]byte(password))
+	if string(h.Sum(nil)) == db.Users[uID].Pass {
+		return uID
 	}
 	return -1
 }
@@ -284,7 +315,7 @@ func FollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 
 	uID,_ := strconv.Atoi(r.URL.Path[len("/follow/"):])
 
-	(*(*db).Users[authID]).FollowList = append((*(*db).Users[authID]).FollowList, (*db).Users[uID])
+	Follow(authID, uID, db)
 
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -300,18 +331,7 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		fmt.Println(err)
 	}
 
-	for x := range (*db).Users {
-		if (*(*db).Users[x]).ID == delID {
-			fmt.Printf("deleting user: %s", (*(*db).Users[x]).Name)
-			for _,y := range (*(*db).Users[x]).Twoots {
-				DeleteTwoot((*y).ID, db)
-			}
-			copy((*db).Users[x:], (*db).Users[x + 1:])
-			(*db).Users[len((*db).Users) - 1] = nil
-			(*db).Users = (*db).Users[:len((*db).Users) - 1]
-			break
-		}
-	}
+	DeleteUser(delID, db)
 
 	LogoutHandler(w, r, db)
 }
@@ -433,6 +453,7 @@ func main() {
 	AddTwoot(2, "the last episode of GOT was awesome", &db)
 	AddTwoot(2, "check out this hilarious meme", &db)
 
+	Follow(GetID("Adam", &db), GetID("Ricardo", &db), &db)
 
 	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
