@@ -194,7 +194,12 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		}
 		http.SetCookie(w, &tok)
 	}
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+	http.Redirect(w, r, "/loginfail", http.StatusTemporaryRedirect)
+}
+
+//	webhandler for displaying the failed login page; redirects after 5 seconds
+func LoginFailHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	RenderFileTemplate(w, "loginfail", db)
 }
 
 //	webhandler for logout; essentially just clears cookie
@@ -237,10 +242,14 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	case http.MethodPost:
 		r.ParseForm()
 		invalid := false
-		for _, usr := range (*db).Users {
-			if (*usr).Name == r.PostFormValue("username") || r.PostFormValue("password") == "" {
-				invalid = true
-				break
+		if r.PostFormValue("username") == "" || r.PostFormValue("password") == "" {
+			invalid = true
+		} else {	
+			for _, usr := range (*db).Users {
+				if (*usr).Name == r.PostFormValue("username") {
+					invalid = true
+					break
+				}
 			}
 		}
 		if invalid {
@@ -256,7 +265,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	}
 }
 
-//	webhandler for displaying the failed login page; redirects after 5 seconds
+//	webhandler for displaying the failed register page; redirects after 5 seconds
 func RegisterFailHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	RenderFileTemplate(w, "regfail", db)
 }
@@ -426,6 +435,7 @@ func main() {
 
 	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
+	http.HandleFunc("/loginfail", MakeDbHandler(LoginFailHandler, &db))
 	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
