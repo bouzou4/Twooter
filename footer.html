@@ -1,21 +1,59 @@
 	</div>
 	<script type="text/javascript">
+		(function($) {
 
-		$('#twootbox').keyup(function(event) {
-			var chars = 100 - $('#twootbox').val().length
-			$('.char-count').text(chars)
-			if (chars >= 0) {
-				$('.char-count').css('color', 'inherit');
-				$('#post-button').show()
+			function jsRedirect(page, wait) {
+				var url = $(location).attr('origin') + page;
+				if (wait === undefined) {
+					window.location.replace(url);
+				}
+				else {
+					console.log("redirecting . . .");
+					setTimeout(function() {
+						window.location.replace(url);
+					}, wait);
+				}
+			}	
+
+			function characterCounter() {
+				$('#twootbox').keyup(function(event) {
+					var chars = 100 - $('#twootbox').val().length;
+					$('.char-count').text(chars);
+					if (chars >= 0) {
+						$('.char-count').css('color', 'inherit');
+						$('#post-button').show();
+					}
+					else {
+						$('.char-count').css('color', 'red');
+						$('#post-button').hide();
+					}
+				});
+
+				$('.char-count').text(100 - $('#twootbox').val().length);
 			}
-			else {
-				$('.char-count').css('color', 'red');
-				$('#post-button').hide()
-			}
-		});
 
-		$('.char-count').text(100 - $('#twootbox').val().length)
 
-	</script>
+			$(document).ready(function () {
+				//Check for Redirects
+				if ($('[data-redirect]')[0]) {
+					var redpage = $($('[data-redirect]')[0]);
+					if ($('[data-redirect-wait]')[0]) {
+						jsRedirect(redpage.data('redirect'),redpage.data('redirect-wait'));
+					}
+					else {
+						jsRedirect(redpage.data('redirect'));
+					}
+				}
+
+				if ($('#twootbox')[0]) {
+					characterCounter();
+				}
+
+			});
+
+
+
+		})(jQuery);
+</script>
 </body>
 </html>

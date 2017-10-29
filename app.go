@@ -236,15 +236,15 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		RenderFileTemplate(w, "register", db)
 	case http.MethodPost:
 		r.ParseForm()
-		found := false
+		invalid := false
 		for _, usr := range (*db).Users {
-			if (*usr).Name == r.PostFormValue("username") {
-				found = true
+			if (*usr).Name == r.PostFormValue("username") || r.PostFormValue("password") == "" {
+				invalid = true
 				break
 			}
 		}
-		if found {
-			http.Redirect(w, r, "/register", http.StatusTemporaryRedirect)
+		if invalid {
+			http.Redirect(w, r, "/registerfail", http.StatusTemporaryRedirect)
 		} else {
 			AddUser(
 				r.PostFormValue("username"),
@@ -254,6 +254,11 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		}
 	}
+}
+
+//	webhandler for displaying the failed login page; redirects after 5 seconds
+func RegisterFailHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	RenderFileTemplate(w, "regfail", db)
 }
 
 //	webhandler for followins a user
@@ -424,9 +429,11 @@ func main() {
 	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
 	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
+	http.HandleFunc("/registerfail", MakeDbHandler(RegisterFailHandler, &db))
 	http.HandleFunc("/follow/", MakeDbHandler(FollowHandler, &db))
 	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
 	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
 
+	fmt.Println("Initializing Server . . .")
 	fmt.Println(http.ListenAndServe(":8080", nil))
 }
