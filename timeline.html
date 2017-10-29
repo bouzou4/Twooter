@@ -15,7 +15,9 @@
 	{{range $twoot1 := .Timeline}}
 	<div class="twoot" style="background-color: {{$twoot1.Author.Color}}">	
 		<a href="localhost:8080/user/{{$twoot1.Author.ID}}" class="author-link no-anchor">{{$twoot1.Author.Name}}</a>
+		{{if ne $clientid $twoot1.Author.ID}}
 		<a href="/follow/{{$twoot1.Author.ID}}">Follow</a>
+		{{end}}
 		<span class="timestamp">{{$twoot1.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot1.Body}}</p>
 		{{if eq $clientid $twoot1.Author.ID}}
@@ -29,7 +31,9 @@
 	{{range $twoot2 := .DB.Twoots}}
 	<div class="twoot" style="background-color: {{$twoot2.Author.Color}}">	
 		<a href="localhost:8080/user/{{$twoot2.Author.ID}}" class="author-link no-anchor">{{$twoot2.Author.Name}}</a>
+		{{if ne $clientid $twoot2.Author.ID}}
 		<a href="/follow/{{$twoot2.Author.ID}}">Follow</a>
+		{{end}}
 		<span class="timestamp">{{$twoot2.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot2.Body}}</p>
 		{{if eq $clientid $twoot2.Author.ID}}
