@@ -46,6 +46,7 @@ type FakeDB struct {
 type Instance struct {
 	Client *User
 	Timeline []*Twoot
+	Latest []*Twoot
 	DB *FakeDB
 }
 
@@ -61,6 +62,24 @@ func readLines(path string) []string {
 		lines = append(lines, fscan.Text())
 	}
 	return lines
+}
+
+//	itirates over array to find element
+func GetID(sli []int, x int) int {
+	for i, el := range sli {
+		if el == x {
+			return i
+		}
+	}
+	return -1
+}
+
+func ReverseTwoots(inp []*Twoot) *[]*Twoot {
+	ret := []*Twoot{}
+	for i := len(inp) - 1; i >= 0; i-- {
+		ret = append(ret, inp[i])
+	}
+	return &ret
 }
 
 func (db *FakeDB) LoadDB() {
@@ -90,8 +109,6 @@ func (db *FakeDB) LoadDB() {
 func ParseUser(i int) *User {
 	lines := readLines(fmt.Sprintf("Data/Users/%d.txt", i))
 
-	fmt.Println(lines)
-
 	p1, _ := strconv.Atoi(lines[0])
 
 	var p5 = []int{}
@@ -120,7 +137,7 @@ func ParseUser(i int) *User {
 	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
-func (db FakeDB) SaveUser(usr *User) string {
+func (db *FakeDB) SaveUser(usr *User) string {
 	data := strconv.Itoa(usr.ID) + "\n" + usr.Name + "\n" + usr.Pass + "\n" + usr.Color + "\n"
 
 	for _, usr := range usr.FollowList {
@@ -136,7 +153,7 @@ func (db FakeDB) SaveUser(usr *User) string {
 	return data
 }
 
-func (db FakeDB) WriteUsers() {
+func (db *FakeDB) WriteUsers() {
 	for _, usr := range db.Users {
 		tempPath := "Data/Users/" + strconv.Itoa(usr.ID) + ".txt"
 		f, err := os.Create(tempPath)
@@ -158,11 +175,11 @@ func ParseTwoot(i int) *Twoot {
 	return &Twoot{ID: p1, Author: p2, Body: lines[2], Created: time.Unix(p4, 0)}
 }
 
-func (db FakeDB) SaveTwoot(twt *Twoot) string {
+func (db *FakeDB) SaveTwoot(twt *Twoot) string {
 	return strconv.Itoa(twt.ID) + "\n" + strconv.Itoa(twt.Author) + "\n" + twt.Body + "\n" + strconv.FormatInt(twt.Created.Unix(), 10) + "\n"
 }
 
-func (db FakeDB) WriteTwoots() {
+func (db *FakeDB) WriteTwoots() {
 	for _, twt := range db.Twoots {
 		tempPath := "Data/Twoots/" + strconv.Itoa(twt.ID) + ".txt"
 		f, err := os.Create(tempPath)
@@ -174,7 +191,7 @@ func (db FakeDB) WriteTwoots() {
 	}
 }
 
-func (db FakeDB) WriteDB() {
+func (db *FakeDB) WriteDB() {
 	var err error
 
 	fmt.Println("updating server . . .")
@@ -237,61 +254,77 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 		Created: time.Now(),
 	}
 	
-	tempTwoots := make([]*Twoot, len(db.Twoots) + 1)
-	tempTwoots[0] = tempTwoot
-	copy(tempTwoots[1:], db.Twoots)
-	db.Twoots = tempTwoots
-
-	tempaTwoots := make([]int, len((*tempAuth).Twoots) + 1)
-	tempaTwoots[0] = tempTwoot.ID
-	copy(tempaTwoots[1:], (*tempAuth).Twoots)
-	(*tempAuth).Twoots = tempaTwoots
+	db.Twoots = append(db.Twoots, tempTwoot)
+	tempAuth.Twoots = append(tempAuth.Twoots, tempTwoot.ID)
 
 	db.WriteDB()
 	return tempID
 }
 
 func Follow(user int, following int, db *FakeDB) {
-	db.Users[user].FollowList = append(db.Users[user].FollowList, following)
-	db.WriteDB()
+	if GetID(db.Users[user].FollowList, following) == -1 {
+		db.Users[user].FollowList = append(db.Users[user].FollowList, following)
+		db.WriteDB()
+	}
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
+
+func Unfollow(user int, unfollowing int, db *FakeDB) {
+	ind := GetID(db.Users[user].FollowList, unfollowing)
+	if ind != -1 {
+
+
+		copy(db.Users[user].FollowList[ind:], db.Users[user].FollowList[ind+1:])
+		db.Users[user].FollowList[len(db.Users[user].FollowList)-1] = -1 // or the zero value of T
+		db.Users[user].FollowList = db.Users[user].FollowList[:len(db.Users[user].FollowList)-1]
+
+
+		// tempList := make([]int, len(db.Users[user].FollowList) - 1)
+		// tempList = append(tempList[:ind], tempList[ind+1:]...)
+		// db.Users[user].FollowList = append(db.Users[user].FollowList, unfollowing)
+		db.WriteDB()
+	}
+	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
+}
+
 
 //	filters out Twoots in database to find those asked for by follow list
 //	returns list of pointers to them
 func FollowFilter(follows []int, db *FakeDB) []*Twoot {
 	timeline := []*Twoot{}
-	for _, i := range db.Twoots {
-		if GetID(follows, (*i).Author) != -1 {
-			timeline = append(timeline, i)
+	for _, x := range *ReverseTwoots(db.Twoots) {
+		if GetID(follows, x.Author) != -1 {
+			timeline = append(timeline, x)
 		}
 	}
 	return timeline
 }
 
 //	resets all IDs in a list of Twoots to their proper order
-func SortTwoots(list *[]*Twoot) {
+func SortTwoots(list *[]*Twoot, db *FakeDB) {
 	for i, x := range *list {
-		x.ID = len(*list) - i
+		x.ID = i
 	}
+	db.WriteDB()
 	fmt.Println("sorted twoots")
 }
 
 //	Used to remove a Twoot from the DB given it's ID
 func DeleteTwoot(dID int, db *FakeDB) {
-	fmt.Printf("looking for Twoot: dID")
-	for x := range db.Twoots {
-		if (*db.Twoots[x]).ID == dID {
-			fmt.Print("deleting twoot: ")
-			fmt.Print((*db.Twoots[x]))
-			fmt.Print("\n")
-			copy(db.Twoots[x:], db.Twoots[x + 1:])
-			db.Twoots[len(db.Twoots) - 1] = nil
-			db.Twoots = db.Twoots[:len(db.Twoots) - 1]
-			SortTwoots(&db.Twoots)
-			break
+	fmt.Printf("looking for Twoot: %d\n", dID)
+	if db.Twoots[dID].ID == dID {
+		fmt.Print("deleting twoot: ")
+		fmt.Print(db.Twoots[dID])
+		fmt.Print("\n")
+		copy(db.Twoots[dID:], db.Twoots[dID + 1:])
+		db.Twoots[len(db.Twoots) - 1] = nil
+		db.Twoots = db.Twoots[:len(db.Twoots) - 1]
+		err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
+		if err != nil {
+			fmt.Println(err)
 		}
 	}
+	SortTwoots(&db.Twoots, db)
 	db.WriteDB()
 }
 
@@ -310,16 +343,6 @@ func DeleteUser(delID int, db *FakeDB) {
 		}
 	}
 	db.WriteDB()
-}
-
-//	itirates over array to find element
-func GetID(sli []int, x int) int {
-	for i, el := range sli {
-		if el == x {
-			return i
-		}
-	}
-	return -1
 }
 
 //	function used to get userID from Username
@@ -363,12 +386,16 @@ func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *FakeDB), db *Fak
 //	otherwise they get the login page
 func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
-	tempID, _ := strconv.Atoi(session.Value)
 	if err != nil {
 		fmt.Println(err)
 		RenderFileTemplate(w, "login", db)
 	} else {
-		if session.Value == "" || !(tempID >= 0 && tempID < len(db.Users)) {
+
+		tempID, err := strconv.Atoi(session.Value)
+		if err != nil {
+			fmt.Println(err)
+			RenderFileTemplate(w, "login", db)
+		} else if session.Value == "" || !(tempID >= 0 && tempID < len(db.Users)) {
 			RenderFileTemplate(w, "login", db)
 		} else {
 			RenderTimeline(w, r, db)
@@ -490,6 +517,24 @@ func FollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
+//	webhandler for followins a user
+func UnfollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
+	session, err := r.Cookie("UserID")
+	if err != nil {
+		fmt.Println(err)
+	}
+	authID, err := strconv.Atoi(session.Value)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	uID,_ := strconv.Atoi(r.URL.Path[len("/unfollow/"):])
+
+	Unfollow(authID, uID, db)
+
+	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+}
+
 //	webhandler for Deleting User, also deletes all of their Twoots
 func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
@@ -520,10 +565,12 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 
 	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
 
-	if db.Twoots[len(db.Twoots) - tID].Author == authID {
-		fmt.Printf("client owns TwootID: %d\n", tID)
+	if db.Twoots[tID].Author == authID {
+		fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
 		DeleteTwoot(tID, db)
 		//SortTwoots(&db.Users[authID].Twoots)
+	} else {
+		fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, db.Twoots[tID])
 	}
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -542,8 +589,8 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			tempID, _ := strconv.Atoi(session.Value)
 			tempUser := db.Users[tempID]
 			timeline := FollowFilter(tempUser.FollowList, db)
-			fmt.Println(timeline)
-			inst = Instance{Client: tempUser, Timeline: timeline, DB: db}
+			latest := *ReverseTwoots(db.Twoots)
+			inst = Instance{Client: tempUser, Timeline: timeline, Latest: latest, DB: db}
 		}
 	}
 
@@ -636,6 +683,7 @@ func main() {
 	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
 	http.HandleFunc("/registerfail", MakeDbHandler(RegisterFailHandler, &db))
 	http.HandleFunc("/follow/", MakeDbHandler(FollowHandler, &db))
+	http.HandleFunc("/unfollow/", MakeDbHandler(UnfollowHandler, &db))
 	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
 	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
 
