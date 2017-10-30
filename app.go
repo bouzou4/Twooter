@@ -2,14 +2,18 @@
 package main
 
 import (
-    "fmt"
-    // "io/ioutil"
-    "net/http"
-    "html/template"
-    // "regexp"
-    "time"
-    "strconv"
-    "crypto/sha1"
+"fmt"
+"os"
+"bufio"
+// "io/ioutil"
+"net/http"
+"html/template"
+// "regexp"
+"time"
+"strings"
+"strconv"
+"crypto/sha256"
+"encoding/hex"
 )
 
 //	regex to validate url request to be implemented soon(tm) 
@@ -22,7 +26,7 @@ type User struct {
 	Pass string
 	Color string
 	FollowList []*User
-	FollowedList []*User
+	// FollowedList []*User
 	Twoots []*Twoot
 }
 
@@ -33,7 +37,7 @@ type Twoot struct {
 	Created time.Time
 }
 
-//	no files yet so the database is held in memory meaning memory violations are always a hair away
+//	no fs yet so the database is held in memory meaning memory violations are always a hair away
 type FakeDB struct {
 	Users []*User
 	Twoots []*Twoot
@@ -45,43 +49,157 @@ type Instance struct {
 	DB *FakeDB
 }
 
+func (db FakeDB) ParseUser(f *os.File) User {
+	var lines []string
+	fscan := bufio.NewScanner(f)
+	for fscan.Scan() {
+        lines = append(lines, fscan.Text())
+    }
+
+    follows := strings.Split(lines[4], " ")
+    follows = follows[:len(follows) - 1]
+    followed := strings.Split(lines[5], " ")
+    followed = followed[:len(followed) - 1]
+
+    p1, _ := strconv.Atoi(lines[0])
+
+    var p5 = []int{}
+    for _, x := range follows {
+        y, _ := strconv.Atoi(x)
+        p5 = append(p5, y)
+    }
+
+    var p6 = []int{}
+    for _, x := range followed {
+    	y, _ := strconv.Atoi(x)
+        p6 = append(p6, y)
+    }
+
+    return User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: []*User{}, Twoots: []*Twoot{}}
+}
+
+func (db FakeDB) SaveUser(usr *User) string {
+	data := strconv.Itoa(usr.ID) + "\n" + usr.Name + "\n" + usr.Pass + "\n" + usr.Color + "\n"
+
+	for _, usr := range usr.FollowList {
+		data += strconv.Itoa(usr.ID) + " "
+	}
+	data += "\n"
+
+	for _, twt := range usr.Twoots {
+		data += strconv.Itoa(twt.ID) + " "
+	}
+	data += "\n"
+
+	return data
+}
+
+func (db FakeDB) WriteUsers() {
+	for _, usr := range db.Users {
+		tempPath := "Data/Users/" + strconv.Itoa(usr.ID) + ".txt"
+		f, err := os.Create(tempPath)
+		if err != nil {
+			fmt.Println(err)
+		}
+		f.WriteString(db.SaveUser(usr))
+		f.Close()
+	}
+}
+
+func (db FakeDB) ParseTwoot(f *os.File) Twoot {
+	var lines []string
+	fscan := bufio.NewScanner(f)
+	for fscan.Scan() {
+        lines = append(lines, fscan.Text())
+    }
+
+    p1, _ := strconv.Atoi(lines[0])
+    // p2, _ := strconv.Atoi(lines[1])
+    p4, _ := strconv.ParseInt(lines[3], 10, 64)
+
+    fmt.Println(Twoot{ID: p1, Author: nil, Body: lines[3], Created: time.Unix(p4, 0)})
+
+    return Twoot{ID: p1, Author: nil, Body: lines[3], Created: time.Unix(p4, 0)}
+}
+
+func (db FakeDB) SaveTwoot(twt *Twoot) string {
+	return strconv.Itoa(twt.ID) + "\n" + strconv.Itoa(twt.Author.ID) + "\n" + twt.Body + "\n" + strconv.FormatInt(twt.Created.Unix(), 10) + "\n"
+}
+
+func (db FakeDB) WriteTwoots() {
+	for _, twt := range db.Twoots {
+		tempPath := "Data/Twoots/" + strconv.Itoa(twt.ID) + ".txt"
+		f, err := os.Create(tempPath)
+		if err != nil {
+			fmt.Println(err)
+		}
+		f.WriteString(db.SaveTwoot(twt))
+		f.Close()
+	}
+}
+
+func (db FakeDB) WriteDB() {
+	var err error
+	
+	err = os.MkdirAll("Data/Users", 0755)
+	if err != nil {
+		fmt.Println(err)
+	}
+	db.WriteUsers()
+
+	err = os.MkdirAll("Data/Twoots", 0755)
+	if err != nil {
+		fmt.Println(err)
+	}
+	db.WriteTwoots()
+
+	index, err := os.Create("Data/Index.txt")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer index.Close()
+
+	index.WriteString("write 1\n")
+	fmt.Fprintf(index, "hello my favorite number is %d\n", 4)
+	index.Sync()
+}
 
 //	adds a user to the database while storing their password as a hash
 //	returns UserID
 func AddUser(name string, pass string, color string, db *FakeDB) int {
-	h := sha1.New()
+	h := sha256.New()
 	h.Write([]byte(pass))
-	bs := string(h.Sum(nil))
+	bs := hex.EncodeToString(h.Sum(nil))
 
-	tempID := len((*db).Users)
+	tempID := len(db.Users)
 	tempUser := &User{
-					ID: tempID, 
-					Name: name, 
-					Pass: bs, 
-					Color: color, 
-					FollowList: []*User{},
-					Twoots: []*Twoot{},
-				}
-	(*db).Users = append((*db).Users, tempUser)
+		ID: tempID, 
+		Name: name, 
+		Pass: bs, 
+		Color: color, 
+		FollowList: []*User{},
+		Twoots: []*Twoot{},
+	}
+	db.Users = append(db.Users, tempUser)
 	return tempID
 }
 
 //	creates and adds Twoot to the database
 //	returns TwootID
 func AddTwoot(author int, body string, db *FakeDB) int {
-	tempID := len((*db).Twoots)
-	tempAuth := (*db).Users[author]
+	tempID := len(db.Twoots)
+	tempAuth := db.Users[author]
 	tempTwoot := &Twoot{
-					ID: tempID, 
-					Author: tempAuth, 
-					Body: body, 
-					Created: time.Now(),
-				}
+		ID: tempID, 
+		Author: tempAuth, 
+		Body: body, 
+		Created: time.Now(),
+	}
 	
-	tempTwoots := make([]*Twoot, len((*db).Twoots) + 1)
+	tempTwoots := make([]*Twoot, len(db.Twoots) + 1)
 	tempTwoots[0] = tempTwoot
-	copy(tempTwoots[1:], (*db).Twoots)
-	(*db).Twoots = tempTwoots
+	copy(tempTwoots[1:], db.Twoots)
+	db.Twoots = tempTwoots
 
 	tempTwoots = make([]*Twoot, len((*tempAuth).Twoots) + 1)
 	tempTwoots[0] = tempTwoot
@@ -93,25 +211,15 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 
 func Follow(user int, following int, db *FakeDB) {
 	db.Users[user].FollowList = append(db.Users[user].FollowList, db.Users[following])
-	db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
-}
-
-//	gets index of followed account and returns it or -1 if not found
-func TwootIndex(vs []*User, t *User) int {
-    for i, v := range vs {
-        if (*v).ID == (*t).ID {
-            return i
-        }
-    }
-    return -1
+	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
 //	filters out Twoots in database to find those asked for by follow list
 //	returns list of pointers to them
 func FollowFilter(follows []*User, db *FakeDB) []*Twoot {
 	timeline := []*Twoot{}
-	for _, i := range (*db).Twoots {
-		if TwootIndex(follows, (*i).Author) != -1 {
+	for _, i := range db.Twoots {
+		if GetTwootID(follows, (*i).Author) != -1 {
 			timeline = append(timeline, i)
 		}
 	}
@@ -129,14 +237,14 @@ func SortTwoots(list *[]*Twoot) {
 //	Used to remove a Twoot from the DB given it's ID
 func DeleteTwoot(dID int, db *FakeDB) {
 	fmt.Printf("looking for Twoot: dID")
-	for x := range (*db).Twoots {
-		if (*(*db).Twoots[x]).ID == dID {
+	for x := range db.Twoots {
+		if (*db.Twoots[x]).ID == dID {
 			fmt.Print("deleting twoot: ")
-			fmt.Print((*(*db).Twoots[x]))
+			fmt.Print((*db.Twoots[x]))
 			fmt.Print("\n")
-			copy((*db).Twoots[x:], (*db).Twoots[x + 1:])
-			(*db).Twoots[len((*db).Twoots) - 1] = nil
-			(*db).Twoots = (*db).Twoots[:len((*db).Twoots) - 1]
+			copy(db.Twoots[x:], db.Twoots[x + 1:])
+			db.Twoots[len(db.Twoots) - 1] = nil
+			db.Twoots = db.Twoots[:len(db.Twoots) - 1]
 			SortTwoots(&db.Twoots)
 			break
 		}
@@ -145,23 +253,33 @@ func DeleteTwoot(dID int, db *FakeDB) {
 
 //	Used to remove a User from the DB given their ID
 func DeleteUser(delID int, db *FakeDB) {
-	for x := range (*db).Users {
-		if (*(*db).Users[x]).ID == delID {
-			fmt.Printf("deleting user: %s\n", (*(*db).Users[x]).Name)
-			for _,y := range (*(*db).Users[x]).Twoots {
+	for x := range db.Users {
+		if (*db.Users[x]).ID == delID {
+			fmt.Printf("deleting user: %s\n", (*db.Users[x]).Name)
+			for _,y := range (*db.Users[x]).Twoots {
 				DeleteTwoot((*y).ID, db)
 			}
-			copy((*db).Users[x:], (*db).Users[x + 1:])
-			(*db).Users[len((*db).Users) - 1] = nil
-			(*db).Users = (*db).Users[:len((*db).Users) - 1]
+			copy(db.Users[x:], db.Users[x + 1:])
+			db.Users[len(db.Users) - 1] = nil
+			db.Users = db.Users[:len(db.Users) - 1]
 			break
 		}
 	}
 }
 
+//	gets index of followed account and returns it or -1 if not found
+func GetTwootID(vs []*User, t *User) int {
+	for i, v := range vs {
+		if v.ID == t.ID {
+			return i
+		}
+	}
+	return -1
+}
+
 //	function used to get userID from Username
 //	returns -1 if not found
-func GetID(username string, db *FakeDB) int {
+func GetUserID(username string, db *FakeDB) int {
 	for _, usr := range db.Users {
 		if usr.Name == username {
 			return usr.ID
@@ -173,10 +291,10 @@ func GetID(username string, db *FakeDB) int {
 //	function used to check if username and password hash match up
 //	returns -1 if credentials are invalid
 func login(username string, password string, db *FakeDB) int {
-	uID := GetID(username, db)
-	h := sha1.New()
+	uID := GetUserID(username, db)
+	h := sha256.New()
 	h.Write([]byte(password))
-	if string(h.Sum(nil)) == db.Users[uID].Pass {
+	if hex.EncodeToString(h.Sum(nil)) == db.Users[uID].Pass {
 		return uID
 	}
 	return -1
@@ -184,9 +302,9 @@ func login(username string, password string, db *FakeDB) int {
 
 //	closure that returns a function that takes an http.ResponseWriter and http.Request and includes the FakeDB object
 func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *FakeDB), db *FakeDB) http.HandlerFunc {
-    return func(w http.ResponseWriter, r *http.Request) {
-        fn(w, r, db)
-    }
+	return func(w http.ResponseWriter, r *http.Request) {
+		fn(w, r, db)
+	}
 }
 
 
@@ -249,17 +367,17 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	switch r.Method {
 	case http.MethodGet:
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-	case http.MethodPost:	
+		case http.MethodPost:	
 		r.ParseForm()
 		if len(r.PostFormValue("twoot")) <= 100 {
 			tok, err := r.Cookie("UserID")
 			if err != nil {
-		        http.Error(w, err.Error(), http.StatusInternalServerError)
-		    }
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			author,err := strconv.Atoi(tok.Value)
 			if err != nil {
-		        http.Error(w, err.Error(), http.StatusInternalServerError)
-		    }
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
 			AddTwoot(author, r.PostFormValue("twoot"), db)
 		}
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
@@ -277,7 +395,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		if r.PostFormValue("username") == "" || r.PostFormValue("password") == "" {
 			invalid = true
 		} else {	
-			for _, usr := range (*db).Users {
+			for _, usr := range db.Users {
 				if (*usr).Name == r.PostFormValue("username") {
 					invalid = true
 					break
@@ -350,10 +468,10 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 
 	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
 
-	if (*(*(*db).Twoots[len((*db).Twoots) - tID]).Author).ID == authID {
+	if (*(*db.Twoots[len(db.Twoots) - tID]).Author).ID == authID {
 		fmt.Printf("client owns TwootID: %d\n", tID)
 		DeleteTwoot(tID, db)
-		SortTwoots(&(*(*db).Users[authID]).Twoots)
+		SortTwoots(&(*db.Users[authID]).Twoots)
 	}
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -370,7 +488,7 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			inst = Instance{Client: nil, DB: db}
 		} else {
 			tempID, _ := strconv.Atoi(session.Value)
-			tempUser := (*db).Users[tempID]
+			tempUser := db.Users[tempID]
 			timeline := FollowFilter((*tempUser).FollowList, db)
 			inst = Instance{Client: tempUser, Timeline: timeline ,DB: db}
 		}
@@ -378,62 +496,62 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    content, err := template.ParseFiles("timeline.html")
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    foot, err := template.ParseFiles("footer.html")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	content, err := template.ParseFiles("timeline.html")
 	if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    err = head.Execute(w, inst)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-    err = content.Execute(w, inst)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-    err = foot.Execute(w, inst)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	foot, err := template.ParseFiles("footer.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = head.Execute(w, inst)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err = content.Execute(w, inst)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err = foot.Execute(w, inst)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
-//	function for sending out specified template given its filename
+//	function for sending out specified template given its fname
 func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 	head, err := template.ParseFiles("header.html")
 	if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    content, err := template.ParseFiles(tmpl + ".html")
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    foot, err := template.ParseFiles("footer.html")
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	content, err := template.ParseFiles(tmpl + ".html")
 	if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-        return
-    }
-    err = head.Execute(w, *db)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-    err = content.Execute(w, *db)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-    err = foot.Execute(w, *db)
-    if err != nil {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	foot, err := template.ParseFiles("footer.html")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = head.Execute(w, *db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err = content.Execute(w, *db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+	err = foot.Execute(w, *db)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func main() {
@@ -453,7 +571,18 @@ func main() {
 	AddTwoot(2, "the last episode of GOT was awesome", &db)
 	AddTwoot(2, "check out this hilarious meme", &db)
 
-	Follow(GetID("Adam", &db), GetID("Ricardo", &db), &db)
+	Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
+
+	db.WriteDB()
+	
+	if 1==1 {
+		j, err := os.Open("Data/Twoots/0.txt")
+		if err != nil {
+			fmt.Println(err)
+		}
+		defer j.Close()
+		db.ParseTwoot(j)
+	}
 
 	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
