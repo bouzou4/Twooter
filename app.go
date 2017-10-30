@@ -138,6 +138,8 @@ func (db FakeDB) WriteTwoots() {
 
 func (db FakeDB) WriteDB() {
 	var err error
+
+	fmt.Println("updating server . . .")
 	
 	err = os.MkdirAll("Data/Users", 0755)
 	if err != nil {
@@ -160,6 +162,8 @@ func (db FakeDB) WriteDB() {
 	index.WriteString("write 1\n")
 	fmt.Fprintf(index, "hello my favorite number is %d\n", 4)
 	index.Sync()
+
+	fmt.Println("server updated")
 }
 
 //	adds a user to the database while storing their password as a hash
@@ -179,6 +183,8 @@ func AddUser(name string, pass string, color string, db *FakeDB) int {
 		Twoots: []int{},
 	}
 	db.Users = append(db.Users, tempUser)
+
+	db.WriteDB()
 	return tempID
 }
 
@@ -204,11 +210,13 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	copy(tempaTwoots[1:], (*tempAuth).Twoots)
 	(*tempAuth).Twoots = tempaTwoots
 
+	db.WriteDB()
 	return tempID
 }
 
 func Follow(user int, following int, db *FakeDB) {
 	db.Users[user].FollowList = append(db.Users[user].FollowList, following)
+	db.WriteDB()
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
@@ -247,6 +255,7 @@ func DeleteTwoot(dID int, db *FakeDB) {
 			break
 		}
 	}
+	db.WriteDB()
 }
 
 //	Used to remove a User from the DB given their ID
@@ -263,6 +272,7 @@ func DeleteUser(delID int, db *FakeDB) {
 			break
 		}
 	}
+	db.WriteDB()
 }
 
 //	itirates over array to find element
@@ -488,7 +498,8 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 			tempID, _ := strconv.Atoi(session.Value)
 			tempUser := db.Users[tempID]
 			timeline := FollowFilter(tempUser.FollowList, db)
-			inst = Instance{Client: tempUser, Timeline: timeline ,DB: db}
+			fmt.Println(timeline)
+			inst = Instance{Client: tempUser, Timeline: timeline, DB: db}
 		}
 	}
 
@@ -572,15 +583,6 @@ func main() {
 	Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
 
 	db.WriteDB()
-	
-	if 1==1 {
-		j, err := os.Open("Data/Twoots/0.txt")
-		if err != nil {
-			fmt.Println(err)
-		}
-		defer j.Close()
-		db.ParseTwoot(j)
-	}
 
 	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))

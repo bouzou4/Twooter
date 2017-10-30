@@ -1,4 +1,5 @@
 {{$clientid := .Client.ID}}
+{{$users := .DB.Users}}
 <div class="compose-window">
 	<h2>Compose a Twoot:</h2>
 	<form id="compose-form" action="/post" method="POST">
@@ -12,15 +13,16 @@
 </div>
 <div id="timeline" class="twoots-container">
 	<h3>Your Timeline</h3>
-	{{range $twoot1 := .Timeline}}
-	<div class="twoot" style="background-color: {{$twoot1.Author.Color}}">	
-		<a href="localhost:8080/user/{{$twoot1.Author.ID}}" class="author-link no-anchor">{{$twoot1.Author.Name}}</a>
-		{{if ne $clientid $twoot1.Author.ID}}
-		<a href="/follow/{{$twoot1.Author.ID}}">Follow</a>
+	{{range $i, $twoot1 := .Timeline}}
+	{{$tempAuth := index $users $i}}
+	<div class="twoot" style="background-color: {{$tempAuth.Color}}">
+		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
+		{{if ne $clientid $tempAuth.ID}}
+		<a href="/follow/{{$tempAuth.ID}}">Follow</a>
 		{{end}}
 		<span class="timestamp">{{$twoot1.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot1.Body}}</p>
-		{{if eq $clientid $twoot1.Author.ID}}
+		{{if eq $clientid $tempAuth.ID}}
 		<a href="/tdelete/{{$twoot1.ID}}">Delete</a>
 		{{end}}
 	</div>
@@ -29,14 +31,15 @@
 <div id="new" class="twoots-container">
 	<h3>New Tweets</h3>
 	{{range $twoot2 := .DB.Twoots}}
-	<div class="twoot" style="background-color: {{$twoot2.Author.Color}}">	
-		<a href="localhost:8080/user/{{$twoot2.Author.ID}}" class="author-link no-anchor">{{$twoot2.Author.Name}}</a>
-		{{if ne $clientid $twoot2.Author.ID}}
-		<a href="/follow/{{$twoot2.Author.ID}}">Follow</a>
+	{{$tempAuth := index $users $twoot2.Author}}
+	<div class="twoot" style="background-color: {{$tempAuth.Color}}">	
+		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
+		{{if ne $clientid $tempAuth.ID}}
+		<a href="/follow/{{$tempAuth.ID}}">Follow</a>
 		{{end}}
 		<span class="timestamp">{{$twoot2.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot2.Body}}</p>
-		{{if eq $clientid $twoot2.Author.ID}}
+		{{if eq $clientid $tempAuth.ID}}
 		<a href="/tdelete/{{$twoot2.ID}}">Delete</a>
 		{{end}}
 	</div>
