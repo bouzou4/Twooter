@@ -13,8 +13,8 @@
 </div>
 <div id="timeline" class="twoots-container">
 	<h3>Your Timeline</h3>
-	{{range $i, $twoot1 := .Timeline}}
-	{{$tempAuth := index $users $i}}
+	{{range $twoot1 := .Timeline}}
+	{{$tempAuth := index $users $twoot1.Author}}
 	<div class="twoot" style="background-color: {{$tempAuth.Color}}">
 		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
 		{{if ne $clientid $tempAuth.ID}}

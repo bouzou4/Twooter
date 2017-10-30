@@ -50,7 +50,7 @@ type Instance struct {
 }
 
 func readLines(path string) []string {
-	f, err := os.Open("Data/Index.txt");
+	f, err := os.Open(path);
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -63,8 +63,7 @@ func readLines(path string) []string {
 	return lines
 }
 
-func LoadDB() *FakeDB {
-	tempDB := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
+func (db *FakeDB) LoadDB() {
 	f, err := os.Open("Data/Index.txt"); 
 	if err == nil {
 		f.Close()
@@ -78,37 +77,44 @@ func LoadDB() *FakeDB {
 			fmt.Println(err)
 		}
 		for i := 0; i < numUsers; i++ {
-			tempDB.Users = append(tempDB.Users, ParseUser(i))
+			db.Users = append(db.Users, ParseUser(i))
 		}
 		for i := 0; i < numTwoots; i++ {
-			tempDB.Twoots = append(tempDB.Twoots, ParseTwoot(i))
+			db.Twoots = append(db.Twoots, ParseTwoot(i))
 		}
 	} else {
 		fmt.Println(err)
 	}
-	return &tempDB
 }
 
 func ParseUser(i int) *User {
 	lines := readLines(fmt.Sprintf("Data/Users/%d.txt", i))
 
-	follows := strings.Split(lines[4], " ")
-	follows = follows[:len(follows) - 1]
-	followed := strings.Split(lines[5], " ")
-	followed = followed[:len(followed) - 1]
+	fmt.Println(lines)
 
 	p1, _ := strconv.Atoi(lines[0])
 
 	var p5 = []int{}
-	for _, x := range follows {
-		y, _ := strconv.Atoi(x)
-		p5 = append(p5, y)
+	var p6 = []int{}
+
+	if lines[4] != ""	{
+		follows := strings.Split(lines[4], " ")
+		follows = follows[:len(follows) - 1]
+		
+		for _, x := range follows {
+			y, _ := strconv.Atoi(x)
+			p5 = append(p5, y)
+		}
 	}
 
-	var p6 = []int{}
-	for _, x := range followed {
-		y, _ := strconv.Atoi(x)
-		p6 = append(p6, y)
+	if lines[5] != ""	{
+		twoots := strings.Split(lines[5], " ")
+		twoots = twoots[:len(twoots) - 1]
+		
+		for _, x := range twoots {
+			y, _ := strconv.Atoi(x)
+			p6 = append(p6, y)
+		}
 	}
 
 	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
@@ -149,7 +155,7 @@ func ParseTwoot(i int) *Twoot {
 	p2, _ := strconv.Atoi(lines[1])
 	p4, _ := strconv.ParseInt(lines[3], 10, 64)
 
-	return &Twoot{ID: p1, Author: p2, Body: lines[3], Created: time.Unix(p4, 0)}
+	return &Twoot{ID: p1, Author: p2, Body: lines[2], Created: time.Unix(p4, 0)}
 }
 
 func (db FakeDB) SaveTwoot(twt *Twoot) string {
@@ -324,6 +330,7 @@ func GetUserID(username string, db *FakeDB) int {
 			return usr.ID
 		}
 	}
+	fmt.Printf("couldn't find user: %s in db of %s\n", username, db.Users)
 	return -1
 }
 
@@ -337,7 +344,10 @@ func login(username string, password string, db *FakeDB) int {
 		if hex.EncodeToString(h.Sum(nil)) == db.Users[uID].Pass {
 			return uID
 		}
+		fmt.Printf("attempted login with incorrect password\n")
+		return -1
 	}
+	fmt.Printf("attempted login with incorrect id: %d\n", uID)
 	return -1
 }
 
@@ -616,7 +626,7 @@ func main() {
 
 	// Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
 
-	db.WriteDB()
+	db.LoadDB()
 
 	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
 	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
