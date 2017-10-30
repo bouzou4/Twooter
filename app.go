@@ -25,14 +25,14 @@ type User struct {
 	Name string
 	Pass string
 	Color string
-	FollowList []*User
+	FollowList []int
 	// FollowedList []*User
-	Twoots []*Twoot
+	Twoots []int
 }
 
 type Twoot struct {
 	ID int
-	Author *User
+	Author int
 	Body string
 	Created time.Time
 }
@@ -75,19 +75,19 @@ func (db FakeDB) ParseUser(f *os.File) User {
         p6 = append(p6, y)
     }
 
-    return User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: []*User{}, Twoots: []*Twoot{}}
+    return User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
 func (db FakeDB) SaveUser(usr *User) string {
 	data := strconv.Itoa(usr.ID) + "\n" + usr.Name + "\n" + usr.Pass + "\n" + usr.Color + "\n"
 
 	for _, usr := range usr.FollowList {
-		data += strconv.Itoa(usr.ID) + " "
+		data += strconv.Itoa(usr) + " "
 	}
 	data += "\n"
 
 	for _, twt := range usr.Twoots {
-		data += strconv.Itoa(twt.ID) + " "
+		data += strconv.Itoa(twt) + " "
 	}
 	data += "\n"
 
@@ -114,16 +114,14 @@ func (db FakeDB) ParseTwoot(f *os.File) Twoot {
     }
 
     p1, _ := strconv.Atoi(lines[0])
-    // p2, _ := strconv.Atoi(lines[1])
+    p2, _ := strconv.Atoi(lines[1])
     p4, _ := strconv.ParseInt(lines[3], 10, 64)
 
-    fmt.Println(Twoot{ID: p1, Author: nil, Body: lines[3], Created: time.Unix(p4, 0)})
-
-    return Twoot{ID: p1, Author: nil, Body: lines[3], Created: time.Unix(p4, 0)}
+    return Twoot{ID: p1, Author: p2, Body: lines[3], Created: time.Unix(p4, 0)}
 }
 
 func (db FakeDB) SaveTwoot(twt *Twoot) string {
-	return strconv.Itoa(twt.ID) + "\n" + strconv.Itoa(twt.Author.ID) + "\n" + twt.Body + "\n" + strconv.FormatInt(twt.Created.Unix(), 10) + "\n"
+	return strconv.Itoa(twt.ID) + "\n" + strconv.Itoa(twt.Author) + "\n" + twt.Body + "\n" + strconv.FormatInt(twt.Created.Unix(), 10) + "\n"
 }
 
 func (db FakeDB) WriteTwoots() {
@@ -177,8 +175,8 @@ func AddUser(name string, pass string, color string, db *FakeDB) int {
 		Name: name, 
 		Pass: bs, 
 		Color: color, 
-		FollowList: []*User{},
-		Twoots: []*Twoot{},
+		FollowList: []int{},
+		Twoots: []int{},
 	}
 	db.Users = append(db.Users, tempUser)
 	return tempID
@@ -191,8 +189,8 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	tempAuth := db.Users[author]
 	tempTwoot := &Twoot{
 		ID: tempID, 
-		Author: tempAuth, 
-		Body: body, 
+		Author: author, 
+		Body: body,
 		Created: time.Now(),
 	}
 	
@@ -201,25 +199,25 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	copy(tempTwoots[1:], db.Twoots)
 	db.Twoots = tempTwoots
 
-	tempTwoots = make([]*Twoot, len((*tempAuth).Twoots) + 1)
-	tempTwoots[0] = tempTwoot
-	copy(tempTwoots[1:], (*tempAuth).Twoots)
-	(*tempAuth).Twoots = tempTwoots
+	tempaTwoots := make([]int, len((*tempAuth).Twoots) + 1)
+	tempaTwoots[0] = tempTwoot.ID
+	copy(tempaTwoots[1:], (*tempAuth).Twoots)
+	(*tempAuth).Twoots = tempaTwoots
 
 	return tempID
 }
 
 func Follow(user int, following int, db *FakeDB) {
-	db.Users[user].FollowList = append(db.Users[user].FollowList, db.Users[following])
+	db.Users[user].FollowList = append(db.Users[user].FollowList, following)
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
 //	filters out Twoots in database to find those asked for by follow list
 //	returns list of pointers to them
-func FollowFilter(follows []*User, db *FakeDB) []*Twoot {
+func FollowFilter(follows []int, db *FakeDB) []*Twoot {
 	timeline := []*Twoot{}
 	for _, i := range db.Twoots {
-		if GetTwootID(follows, (*i).Author) != -1 {
+		if GetID(follows, (*i).Author) != -1 {
 			timeline = append(timeline, i)
 		}
 	}
@@ -228,8 +226,8 @@ func FollowFilter(follows []*User, db *FakeDB) []*Twoot {
 
 //	resets all IDs in a list of Twoots to their proper order
 func SortTwoots(list *[]*Twoot) {
-	for i,x := range *list {
-		(*x).ID = len(*list) - i
+	for i, x := range *list {
+		x.ID = len(*list) - i
 	}
 	fmt.Println("sorted twoots")
 }
@@ -256,8 +254,8 @@ func DeleteUser(delID int, db *FakeDB) {
 	for x := range db.Users {
 		if (*db.Users[x]).ID == delID {
 			fmt.Printf("deleting user: %s\n", (*db.Users[x]).Name)
-			for _,y := range (*db.Users[x]).Twoots {
-				DeleteTwoot((*y).ID, db)
+			for _, y := range (*db.Users[x]).Twoots {
+				DeleteTwoot(y, db)
 			}
 			copy(db.Users[x:], db.Users[x + 1:])
 			db.Users[len(db.Users) - 1] = nil
@@ -267,10 +265,10 @@ func DeleteUser(delID int, db *FakeDB) {
 	}
 }
 
-//	gets index of followed account and returns it or -1 if not found
-func GetTwootID(vs []*User, t *User) int {
-	for i, v := range vs {
-		if v.ID == t.ID {
+//	itirates over array to find element
+func GetID(sli []int, x int) int {
+	for i, el := range sli {
+		if el == x {
 			return i
 		}
 	}
@@ -468,10 +466,10 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 
 	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
 
-	if (*(*db.Twoots[len(db.Twoots) - tID]).Author).ID == authID {
+	if db.Twoots[len(db.Twoots) - tID].Author == authID {
 		fmt.Printf("client owns TwootID: %d\n", tID)
 		DeleteTwoot(tID, db)
-		SortTwoots(&(*db.Users[authID]).Twoots)
+		//SortTwoots(&db.Users[authID].Twoots)
 	}
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
@@ -489,7 +487,7 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 		} else {
 			tempID, _ := strconv.Atoi(session.Value)
 			tempUser := db.Users[tempID]
-			timeline := FollowFilter((*tempUser).FollowList, db)
+			timeline := FollowFilter(tempUser.FollowList, db)
 			inst = Instance{Client: tempUser, Timeline: timeline ,DB: db}
 		}
 	}
