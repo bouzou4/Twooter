@@ -49,33 +49,69 @@ type Instance struct {
 	DB *FakeDB
 }
 
-func (db FakeDB) ParseUser(f *os.File) User {
+func readLines(path string) []string {
+	f, err := os.Open("Data/Index.txt");
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer f.Close()
 	var lines []string
 	fscan := bufio.NewScanner(f)
 	for fscan.Scan() {
-        lines = append(lines, fscan.Text())
-    }
+		lines = append(lines, fscan.Text())
+	}
+	return lines
+}
 
-    follows := strings.Split(lines[4], " ")
-    follows = follows[:len(follows) - 1]
-    followed := strings.Split(lines[5], " ")
-    followed = followed[:len(followed) - 1]
+func LoadDB() *FakeDB {
+	tempDB := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
+	f, err := os.Open("Data/Index.txt"); 
+	if err == nil {
+		f.Close()
+		lines := readLines("Data/Index.txt")
+		numUsers, err := strconv.Atoi(lines[1])
+		if err != nil {
+			fmt.Println(err)
+		} 
+		numTwoots, err := strconv.Atoi(lines[4])
+		if err != nil {
+			fmt.Println(err)
+		}
+		for i := 0; i < numUsers; i++ {
+			tempDB.Users = append(tempDB.Users, ParseUser(i))
+		}
+		for i := 0; i < numTwoots; i++ {
+			tempDB.Twoots = append(tempDB.Twoots, ParseTwoot(i))
+		}
+	} else {
+		fmt.Println(err)
+	}
+	return &tempDB
+}
 
-    p1, _ := strconv.Atoi(lines[0])
+func ParseUser(i int) *User {
+	lines := readLines(fmt.Sprintf("Data/Users/%d.txt", i))
 
-    var p5 = []int{}
-    for _, x := range follows {
-        y, _ := strconv.Atoi(x)
-        p5 = append(p5, y)
-    }
+	follows := strings.Split(lines[4], " ")
+	follows = follows[:len(follows) - 1]
+	followed := strings.Split(lines[5], " ")
+	followed = followed[:len(followed) - 1]
 
-    var p6 = []int{}
-    for _, x := range followed {
-    	y, _ := strconv.Atoi(x)
-        p6 = append(p6, y)
-    }
+	p1, _ := strconv.Atoi(lines[0])
 
-    return User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
+	var p5 = []int{}
+	for _, x := range follows {
+		y, _ := strconv.Atoi(x)
+		p5 = append(p5, y)
+	}
+
+	var p6 = []int{}
+	for _, x := range followed {
+		y, _ := strconv.Atoi(x)
+		p6 = append(p6, y)
+	}
+
+	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
 func (db FakeDB) SaveUser(usr *User) string {
@@ -106,18 +142,14 @@ func (db FakeDB) WriteUsers() {
 	}
 }
 
-func (db FakeDB) ParseTwoot(f *os.File) Twoot {
-	var lines []string
-	fscan := bufio.NewScanner(f)
-	for fscan.Scan() {
-        lines = append(lines, fscan.Text())
-    }
+func ParseTwoot(i int) *Twoot {
+	lines := readLines(fmt.Sprintf("Data/Twoots/%d.txt", i))
 
-    p1, _ := strconv.Atoi(lines[0])
-    p2, _ := strconv.Atoi(lines[1])
-    p4, _ := strconv.ParseInt(lines[3], 10, 64)
+	p1, _ := strconv.Atoi(lines[0])
+	p2, _ := strconv.Atoi(lines[1])
+	p4, _ := strconv.ParseInt(lines[3], 10, 64)
 
-    return Twoot{ID: p1, Author: p2, Body: lines[3], Created: time.Unix(p4, 0)}
+	return &Twoot{ID: p1, Author: p2, Body: lines[3], Created: time.Unix(p4, 0)}
 }
 
 func (db FakeDB) SaveTwoot(twt *Twoot) string {
@@ -159,8 +191,7 @@ func (db FakeDB) WriteDB() {
 	}
 	defer index.Close()
 
-	index.WriteString("write 1\n")
-	fmt.Fprintf(index, "hello my favorite number is %d\n", 4)
+	fmt.Fprintf(index, "Users\n%d\n\nTwoots\n%d\n", len(db.Users), len(db.Twoots))
 	index.Sync()
 
 	fmt.Println("server updated")
@@ -302,8 +333,10 @@ func login(username string, password string, db *FakeDB) int {
 	uID := GetUserID(username, db)
 	h := sha256.New()
 	h.Write([]byte(password))
-	if hex.EncodeToString(h.Sum(nil)) == db.Users[uID].Pass {
-		return uID
+	if uID >= 0 && uID < len(db.Users) {
+		if hex.EncodeToString(h.Sum(nil)) == db.Users[uID].Pass {
+			return uID
+		}
 	}
 	return -1
 }
@@ -320,11 +353,12 @@ func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *FakeDB), db *Fak
 //	otherwise they get the login page
 func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
 	session, err := r.Cookie("UserID")
+	tempID, _ := strconv.Atoi(session.Value)
 	if err != nil {
 		fmt.Println(err)
 		RenderFileTemplate(w, "login", db)
 	} else {
-		if session.Value == "" {
+		if session.Value == "" || !(tempID >= 0 && tempID < len(db.Users)) {
 			RenderFileTemplate(w, "login", db)
 		} else {
 			RenderTimeline(w, r, db)
@@ -566,21 +600,21 @@ func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
 func main() {
 	db := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
 
-	AddUser("Adam", "password", "#00afa0", &db)
-	AddUser("Rick", "oo", "#859911", &db)
-	AddUser("Ricardo", "pp", "#359890", &db)
+	// AddUser("Adam", "password", "#00afa0", &db)
+	// AddUser("Rick", "oo", "#859911", &db)
+	// AddUser("Ricardo", "pp", "#359890", &db)
 
-	AddTwoot(0, "my last name is bouz", &db)
-	AddTwoot(0, "what a nice day", &db)
-	AddTwoot(0, "whats going on", &db)
-	AddTwoot(1, "I like eggs", &db)
-	AddTwoot(1, "did you see the game last night", &db)
-	AddTwoot(1, "i know who im voting for in the election", &db)
-	AddTwoot(2, "any movie recommendations", &db)
-	AddTwoot(2, "the last episode of GOT was awesome", &db)
-	AddTwoot(2, "check out this hilarious meme", &db)
+	// AddTwoot(0, "my last name is bouz", &db)
+	// AddTwoot(0, "what a nice day", &db)
+	// AddTwoot(0, "whats going on", &db)
+	// AddTwoot(1, "I like eggs", &db)
+	// AddTwoot(1, "did you see the game last night", &db)
+	// AddTwoot(1, "i know who im voting for in the election", &db)
+	// AddTwoot(2, "any movie recommendations", &db)
+	// AddTwoot(2, "the last episode of GOT was awesome", &db)
+	// AddTwoot(2, "check out this hilarious meme", &db)
 
-	Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
+	// Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
 
 	db.WriteDB()
 
