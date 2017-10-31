@@ -32,6 +32,20 @@
 				$('.char-count').text(100 - $('#twootbox').val().length);
 			}
 
+			function registerExample() {
+				var twoot = $(".twoot");
+				var usernameInp = $("input[name^='username']");
+				var colorInp = $("select[name^='color']");
+				
+				usernameInp.keyup(function(event) {
+					$(".twoot>a").text(usernameInp.val());
+				});
+
+				colorInp.on('change', function() {
+					twoot.css('background-color', colorInp.val());
+				});
+			}
+
 
 			$(document).ready(function () {
 				//Check for Redirects
@@ -45,8 +59,14 @@
 					}
 				}
 
+				//check for compose box
 				if ($('#twootbox')[0]) {
 					characterCounter();
+				}
+
+				//check for register form
+				if ($('#register-form')[0]) {
+					registerExample();
 				}
 
 			});
