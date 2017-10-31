@@ -56,36 +56,106 @@ type AppServer struct {
 	Scanr *bufio.Scanner
 }
 
-func (serv *AppServer) GetID(uID int) int {
+
+func ParseUser(msg string) *User {
+	lines := strings.Split(msg, "|")
+
+	p1, _ := strconv.Atoi(lines[0])
+
+	var p5 = []int{}
+	var p6 = []int{}
+
+	if lines[4] != ""	{
+		follows := strings.Split(lines[4], " ")
+		follows = follows[:len(follows) - 1]
+		
+		for _, x := range follows {
+			y, _ := strconv.Atoi(x)
+			p5 = append(p5, y)
+		}
+	}
+
+	if lines[5] != ""	{
+		twoots := strings.Split(lines[5], " ")
+		twoots = twoots[:len(twoots) - 1]
+		
+		for _, x := range twoots {
+			y, _ := strconv.Atoi(x)
+			p6 = append(p6, y)
+		}
+	}
+
+	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
+}
+
+func ParseTwoot(msg string) *Twoot {
+	lines := strings.Split(msg, "|")
+
+	p1, _ := strconv.Atoi(lines[0])
+	p2, _ := strconv.Atoi(lines[1])
+	p4, _ := strconv.ParseInt(lines[3], 10, 64)
+
+	return &Twoot{ID: p1, Author: p2, Body: lines[2], Created: time.Unix(p4, 0)}
+}
+
+//	filters out Twoots in pointer list to find those asked for by follow list
+//	returns list of pointers to them
+func FollowFilter(follows []int, twts []*Twoot) []*Twoot {
+	timeline := []*Twoot{}
+	for _, x := range twts {
+		for _, y := range follows {
+			if x.Author == y {
+				timeline = append(timeline, x)
+				break
+			}
+		}
+	}
+	return timeline
+}
+
+func (serv *AppServer) GetID(list string, uID int) int {
 	return 0
 }
 
 func (serv *AppServer) UserSearch(username string) int {
-	return 0
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"UserSearch", username}))
+	return ret
 }
 
 func (serv *AppServer) GetUser(uID int) User {
-	return User{}
+	return *ParseUser(serv.ServerRequest([]string{"GetUser", strconv.Itoa(uID)}))
 }
 
 func (serv *AppServer) GetNumUsers() int {
-	return 0
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetNumUsers"}))
+	return ret
 }
 
 func (serv *AppServer) GetUsers() []*User {
-	return []*User{}
+	ret := []*User{}
+	lines := strings.Split(serv.ServerRequest([]string{"GetUsers"}), "[|]")
+	for _,line := range  lines[:len(lines) - 1]{
+		ret = append(ret, ParseUser(line))
+	}
+	return ret
 }
 
-func (serv *AppServer) GetTwoot(uID int) Twoot {
-	return Twoot{}
+func (serv *AppServer) GetTwoot(tID int) Twoot {
+	return *ParseTwoot(serv.ServerRequest([]string{"GetTwoot", strconv.Itoa(tID)}))
 }
 
 func (serv *AppServer) GetNumTwoots() int {
-	return 0
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetNumTwoots"}))
+	return ret
 }
 
-func (serv *AppServer) GetTwoots() []*Twoot {
-	return []*Twoot{}
+func (serv *AppServer) GetTwoots(reversed bool) []*Twoot {
+	ret := []*Twoot{}
+	lines := strings.Split(serv.ServerRequest([]string{"GetTwoots", strconv.FormatBool(reversed)}), "[|]")
+	for _,line := range  lines[:len(lines) - 1]{
+		ret = append(ret, ParseTwoot(line))
+	}
+	return ret
 }
 
 func (serv *AppServer) Login(username string, password string) int {
@@ -97,30 +167,32 @@ func (serv *AppServer) Login(username string, password string) int {
 }
 
 func (serv *AppServer) AddTwoot(author int, body string) int {
-	return 0
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"AddTwoot", strconv.Itoa(author), body}))
+	return ret
 }
 
 func (serv *AppServer) AddUser(name string, pass string, color string) int {
-	return 0
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"AddUser", name, pass, color}))
+	return ret
 }
 
 func (serv *AppServer) DeleteTwoot(dID int) {
-
+	serv.ServerRequest([]string{"DeleteTwoot", strconv.Itoa(dID)})
 }
 
 func (serv *AppServer) DeleteUser(delID int) {
-	
+	serv.ServerRequest([]string{"DeleteUser", strconv.Itoa(delID)})
 }
 
 func (serv *AppServer) Follow(user int, following int) {
-	
+	serv.ServerRequest([]string{"Follow", strconv.Itoa(user), strconv.Itoa(following)})
 }
 
 func (serv *AppServer) Unfollow(user int, unfollowing int) {
-
+	serv.ServerRequest([]string{"Unfollow", strconv.Itoa(user), strconv.Itoa(unfollowing)})
 }
 
-func (serv *AppServer) FollowFilter(follows []int) []*Twoot {
+func (serv *AppServer) FollowFilter(uID int) []*Twoot {
 	return []*Twoot{}
 }
 
@@ -131,12 +203,12 @@ func (serv *AppServer) ServerRequest(args []string) string {
 	// 	fmt.Printf("decode error: %s\n", err)
 	// }
 
-	fmt.Fprintln(serv.Connect, strings.Join(args[:]," ")) 
+	fmt.Fprintln(serv.Connect, strings.Join(args[:],"[}{]")) 
 
 	scanner:= bufio.NewScanner(serv.Connect)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Printf("server response to %s request: %s\n", args[0], line)
+		// fmt.Printf("server response to %s request: %s\n", args[0], line)
 		return line
 		break
 	}		
@@ -163,7 +235,7 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		if err != nil {
 			fmt.Println(err)
 			RenderFileTemplate(w, "login")
-		} else if serv.GetID(tempID) == -1 {
+		} else if serv.GetID("users", tempID) == -1 {
 			RenderFileTemplate(w, "login")
 		} else {
 			RenderTimeline(w, r, serv)
@@ -343,6 +415,7 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 
 //	function for sending out template for the client's timeline
 func RenderTimeline(w http.ResponseWriter, r *http.Request, serv *AppServer) {
+	fmt.Printf("Twoot: %s\n", serv.GetTwoot(1))
 	session, err := r.Cookie("UserID")
 	var inst Instance
 	if err != nil {
@@ -351,9 +424,9 @@ func RenderTimeline(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		if session.Value != "" {
 			tempID, _ := strconv.Atoi(session.Value)
 			tempUser := serv.GetUser(tempID)
-			timeline := serv.FollowFilter(tempUser.FollowList)
-			latest := serv.GetTwoots()
 			users := serv.GetUsers()
+			latest := serv.GetTwoots(true)
+			timeline := FollowFilter(users[tempUser.ID].FollowList, latest)
 			inst = Instance{Client: &tempUser, Timeline: timeline, Latest: latest, Users: users}
 		}
 	}

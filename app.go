@@ -146,20 +146,30 @@ func ParseUser(i int) *User {
 	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
-func (db *FakeDB) SaveUser(usr *User) string {
-	data := strconv.Itoa(usr.ID) + "\n" + usr.Name + "\n" + usr.Pass + "\n" + usr.Color + "\n"
+func (db *FakeDB) SaveUser(uID int, connector string) string {
+	usr := db.Users[uID]
+	data := strconv.Itoa(usr.ID) + connector + usr.Name + connector + usr.Pass + connector + usr.Color + connector
 
 	for _, usr := range usr.FollowList {
 		data += strconv.Itoa(usr) + " "
 	}
-	data += "\n"
+	data += connector
 
 	for _, twt := range usr.Twoots {
 		data += strconv.Itoa(twt) + " "
 	}
-	data += "\n"
+	data += connector
 
 	return data
+}
+
+func (db *FakeDB) SendUsers() string {
+	ret := ""
+	for _, usr := range db.Users {
+		ret += db.SaveUser(usr.ID, "|")
+		ret += "[|]"
+	}
+	return ret
 }
 
 func (db *FakeDB) WriteUsers() {
@@ -169,7 +179,7 @@ func (db *FakeDB) WriteUsers() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		f.WriteString(db.SaveUser(usr))
+		f.WriteString(db.SaveUser(usr.ID, "\n"))
 		f.Close()
 	}
 }
@@ -184,8 +194,26 @@ func ParseTwoot(i int) *Twoot {
 	return &Twoot{ID: p1, Author: p2, Body: lines[2], Created: time.Unix(p4, 0)}
 }
 
-func (db *FakeDB) SaveTwoot(twt *Twoot) string {
-	return strconv.Itoa(twt.ID) + "\n" + strconv.Itoa(twt.Author) + "\n" + twt.Body + "\n" + strconv.FormatInt(twt.Created.Unix(), 10) + "\n"
+func (db *FakeDB) SaveTwoot(tID int, connector string) string {
+	twt := db.Twoots[tID]
+	return strconv.Itoa(twt.ID) + connector + strconv.Itoa(twt.Author) + connector + twt.Body + connector + strconv.FormatInt(twt.Created.Unix(), 10) + connector
+}
+
+func (db *FakeDB) SendTwoots(reversed bool) string {
+	ret := ""
+	if !reversed {
+		for _, twt := range db.Twoots {
+			ret += db.SaveTwoot(twt.ID, "|")
+			ret += "[|]"
+		}
+	} else {
+		for _, twt := range *ReverseTwoots(db.Twoots) {
+			ret += db.SaveTwoot(twt.ID, "|")
+			ret += "[|]"
+		}
+	}
+
+	return ret
 }
 
 func (db *FakeDB) WriteTwoots() {
@@ -195,7 +223,7 @@ func (db *FakeDB) WriteTwoots() {
 		if err != nil {
 			fmt.Println(err)
 		}
-		f.WriteString(db.SaveTwoot(twt))
+		f.WriteString(db.SaveTwoot(twt.ID, "\n"))
 		f.Close()
 	}
 }
@@ -290,19 +318,6 @@ func Unfollow(user int, unfollowing int, db *FakeDB) {
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
-
-//	filters out Twoots in database to find those asked for by follow list
-//	returns list of pointers to them
-func FollowFilter(follows []int, db *FakeDB) []*Twoot {
-	timeline := []*Twoot{}
-	for _, x := range *ReverseTwoots(db.Twoots) {
-		if GetID(follows, x.Author) != -1 {
-			timeline = append(timeline, x)
-		}
-	}
-	return timeline
-}
-
 //	resets all IDs in a list of Twoots to their proper order
 func SortTwoots(list *[]*Twoot, db *FakeDB) {
 	for i, x := range *list {
@@ -389,11 +404,54 @@ func handleConnection(Connect net.Conn, db *FakeDB) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Printf("received request: %s\n", line)
-		args :=  strings.Split(line, " ")
+		args :=  strings.Split(line, "[}{]")
 		
 		switch args[0] {
 		case "Login":
 			fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
+		// case "GetID":
+		// 	fmt.Fprintln(Connect, strconv.Itoa(GetID(args[1], args[2], db)))
+		case "UserSearch":
+			fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
+		case "GetUser":
+			ind,_ := strconv.Atoi(args[1])
+			fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
+		case "GetNumUsers":
+			fmt.Fprintln(Connect, len(db.Users))
+		case "GetUsers":
+			fmt.Fprintln(Connect, db.SendUsers())
+		case "GetTwoot":
+			ind,_ := strconv.Atoi(args[1])
+			fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
+		case "GetNumTwoots":
+			fmt.Fprintln(Connect, len(db.Twoots))
+		case "GetTwoots":
+			rev,_ := strconv.ParseBool(args[1])
+			fmt.Fprintln(Connect, db.SendTwoots(rev))
+		case "AddTwoot":
+			id,_ := strconv.Atoi(args[1])
+			fmt.Fprintln(Connect, strconv.Itoa(AddTwoot(id, args[2], db)))
+		case "AddUser":
+			fmt.Fprintln(Connect, AddUser(args[1], args[2], args[3], db))
+		case "DeleteTwoot":
+			ind,_ := strconv.Atoi(args[1])
+			DeleteTwoot(ind, db)
+			fmt.Fprintln(Connect, "Done")
+		case "DeleteUser":
+			ind,_ := strconv.Atoi(args[1])
+			DeleteUser(ind, db)
+			fmt.Fprintln(Connect, "Done")
+		case "Follow":
+			ind1,_ := strconv.Atoi(args[1])
+			ind2,_ := strconv.Atoi(args[2])
+			Follow(ind1, ind2, db)
+			fmt.Fprintln(Connect, "Done")
+		case "Unfollow":
+			ind1,_ := strconv.Atoi(args[1])
+			ind2,_ := strconv.Atoi(args[2])
+			Unfollow(ind1, ind2, db)
+			fmt.Fprintln(Connect, "Done")	
+
 		default:
 			fmt.Println("invalid request made: %s\n", args[0])
 		}
