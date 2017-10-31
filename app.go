@@ -409,8 +409,18 @@ func handleConnection(Connect net.Conn, db *FakeDB) {
 		switch args[0] {
 		case "Login":
 			fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
-		// case "GetID":
-		// 	fmt.Fprintln(Connect, strconv.Itoa(GetID(args[1], args[2], db)))
+		case "GetID":
+			if args[1] == "Users" {
+				id,_ := strconv.Atoi(args[2])
+				if !(id >= 0 && id < len(db.Users)) {
+					fmt.Fprintln(Connect, strconv.Itoa(id)
+				} else {
+					fmt.Fprintln(Connect, strconv.Itoa(-1))
+				}
+			} else {
+				fmt.Fprintln(Connect, strconv.Itoa(-1))
+			}
+			
 		case "UserSearch":
 			fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
 		case "GetUser":

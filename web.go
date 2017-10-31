@@ -113,8 +113,9 @@ func FollowFilter(follows []int, twts []*Twoot) []*Twoot {
 	return timeline
 }
 
-func (serv *AppServer) GetID(list string, uID int) int {
-	return 0
+func (serv *AppServer) GetID(list string, val int) int {
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetID", list, val}))
+	return ret
 }
 
 func (serv *AppServer) UserSearch(username string) int {
