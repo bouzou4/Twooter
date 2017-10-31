@@ -349,16 +349,25 @@ func DeleteTwoot(dID int, db *FakeDB) {
 
 //	Used to remove a User from the DB given their ID
 func DeleteUser(delID int, db *FakeDB) {
-	for x := range db.Users {
-		if (*db.Users[x]).ID == delID {
-			fmt.Printf("deleting user: %s\n", (*db.Users[x]).Name)
-			for _, y := range (*db.Users[x]).Twoots {
+	for i, x := range db.Users {
+		if x.ID == delID {
+			fmt.Printf("deleting user: %s\n", x.Name)
+			for _, y := range x.Twoots {
 				DeleteTwoot(y, db)
 			}
-			copy(db.Users[x:], db.Users[x + 1:])
+
+			copy(db.Users[i:], db.Users[i + 1:])
 			db.Users[len(db.Users) - 1] = nil
 			db.Users = db.Users[:len(db.Users) - 1]
-			break
+
+			err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", len(db.Users)))
+			if err != nil {
+				fmt.Println(err)
+			}
+		} else {
+			if GetID(x.FollowList, delID) != -1{
+				Unfollow(x.ID, delID, db)
+			}
 		}
 	}
 	db.WriteDB()
@@ -382,6 +391,7 @@ func login(username string, hashed string, db *FakeDB) int {
 	uID := GetUserID(username, db)
 	if uID >= 0 && uID < len(db.Users) {
 		if hashed == db.Users[uID].Pass {
+			fmt.Printf("User %s logged in\n", username)
 			return uID
 		}
 		fmt.Printf("attempted login with incorrect password\n")
@@ -403,7 +413,7 @@ func handleConnection(Connect net.Conn, db *FakeDB) {
 	scanner:= bufio.NewScanner(Connect)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Printf("received request: %s\n", line)
+		fmt.Printf("received request: %s\n", strings.Join(strings.Split(line, "[}{]"), ", "))
 		args :=  strings.Split(line, "[}{]")
 		
 		switch args[0] {
@@ -413,7 +423,7 @@ func handleConnection(Connect net.Conn, db *FakeDB) {
 			if args[1] == "Users" {
 				id,_ := strconv.Atoi(args[2])
 				if !(id >= 0 && id < len(db.Users)) {
-					fmt.Fprintln(Connect, strconv.Itoa(id)
+					fmt.Fprintln(Connect, strconv.Itoa(id))
 				} else {
 					fmt.Fprintln(Connect, strconv.Itoa(-1))
 				}

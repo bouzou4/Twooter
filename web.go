@@ -114,7 +114,7 @@ func FollowFilter(follows []int, twts []*Twoot) []*Twoot {
 }
 
 func (serv *AppServer) GetID(list string, val int) int {
-	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetID", list, val}))
+	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetID", list, strconv.Itoa(val)}))
 	return ret
 }
 
@@ -236,7 +236,7 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		if err != nil {
 			fmt.Println(err)
 			RenderFileTemplate(w, "login")
-		} else if serv.GetID("users", tempID) == -1 {
+		} else if serv.GetID("users", tempID) != -1 {
 			RenderFileTemplate(w, "login")
 		} else {
 			RenderTimeline(w, r, serv)
@@ -416,7 +416,6 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 
 //	function for sending out template for the client's timeline
 func RenderTimeline(w http.ResponseWriter, r *http.Request, serv *AppServer) {
-	fmt.Printf("Twoot: %s\n", serv.GetTwoot(1))
 	session, err := r.Cookie("UserID")
 	var inst Instance
 	if err != nil {
