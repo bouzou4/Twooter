@@ -6,14 +6,14 @@ import (
 "os"
 "bufio"
 // "io/ioutil"
-"net/http"
-"html/template"
+"net"
 // "regexp"
 "time"
 "strings"
 "strconv"
 "crypto/sha256"
 "encoding/hex"
+// "encoding/gob"
 )
 
 //	regex to validate url request to be implemented soon(tm) 
@@ -69,6 +69,15 @@ func GetID(sli []int, x int) int {
 	for i, el := range sli {
 		if el == x {
 			return i
+		}
+	}
+	return -1
+}
+
+func UserSearch(username string, db *FakeDB) int {
+	for _, el := range db.Users {
+		if el.Name == username {
+			return el.ID
 		}
 	}
 	return -1
@@ -272,16 +281,10 @@ func Follow(user int, following int, db *FakeDB) {
 func Unfollow(user int, unfollowing int, db *FakeDB) {
 	ind := GetID(db.Users[user].FollowList, unfollowing)
 	if ind != -1 {
-
-
 		copy(db.Users[user].FollowList[ind:], db.Users[user].FollowList[ind+1:])
 		db.Users[user].FollowList[len(db.Users[user].FollowList)-1] = -1 // or the zero value of T
 		db.Users[user].FollowList = db.Users[user].FollowList[:len(db.Users[user].FollowList)-1]
 
-
-		// tempList := make([]int, len(db.Users[user].FollowList) - 1)
-		// tempList = append(tempList[:ind], tempList[ind+1:]...)
-		// db.Users[user].FollowList = append(db.Users[user].FollowList, unfollowing)
 		db.WriteDB()
 	}
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
@@ -314,11 +317,12 @@ func DeleteTwoot(dID int, db *FakeDB) {
 	fmt.Printf("looking for Twoot: %d\n", dID)
 	if db.Twoots[dID].ID == dID {
 		fmt.Print("deleting twoot: ")
-		fmt.Print(db.Twoots[dID])
-		fmt.Print("\n")
+		fmt.Println(db.Twoots[dID])
+
 		copy(db.Twoots[dID:], db.Twoots[dID + 1:])
 		db.Twoots[len(db.Twoots) - 1] = nil
 		db.Twoots = db.Twoots[:len(db.Twoots) - 1]
+
 		err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
 		if err != nil {
 			fmt.Println(err)
@@ -359,12 +363,10 @@ func GetUserID(username string, db *FakeDB) int {
 
 //	function used to check if username and password hash match up
 //	returns -1 if credentials are invalid
-func login(username string, password string, db *FakeDB) int {
+func login(username string, hashed string, db *FakeDB) int {
 	uID := GetUserID(username, db)
-	h := sha256.New()
-	h.Write([]byte(password))
 	if uID >= 0 && uID < len(db.Users) {
-		if hex.EncodeToString(h.Sum(nil)) == db.Users[uID].Pass {
+		if hashed == db.Users[uID].Pass {
 			return uID
 		}
 		fmt.Printf("attempted login with incorrect password\n")
@@ -374,319 +376,53 @@ func login(username string, password string, db *FakeDB) int {
 	return -1
 }
 
-//	closure that returns a function that takes an http.ResponseWriter and http.Request and includes the FakeDB object
-func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *FakeDB), db *FakeDB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		fn(w, r, db)
-	}
-}
-
-
-//	webhandler for the homepage, if the user is logged in then they get their timeline 
-//	otherwise they get the login page
-func BaseHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	if err != nil {
-		fmt.Println(err)
-		RenderFileTemplate(w, "login", db)
-	} else {
-
-		tempID, err := strconv.Atoi(session.Value)
-		if err != nil {
-			fmt.Println(err)
-			RenderFileTemplate(w, "login", db)
-		} else if session.Value == "" || !(tempID >= 0 && tempID < len(db.Users)) {
-			RenderFileTemplate(w, "login", db)
-		} else {
-			RenderTimeline(w, r, db)
-		}
-	}
-}
-
-//	webhandler for login page performs login() and sets the cookie
-func LoginHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	r.ParseForm()
-	cookID := login(r.PostFormValue("username"), r.PostFormValue("password"), db)
-	fmt.Println("Login Post Request\ncookie value: " + strconv.Itoa(cookID))
-	if cookID != -1 {
-		tok := http.Cookie {
-			Name: "UserID",
-			Value: strconv.Itoa(cookID),
-			Expires: time.Now().Add(1 * time.Hour),
-		}
-		http.SetCookie(w, &tok)
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-	} else {
-		tok := http.Cookie {
-			Name: "UserID",
-			Value: "",
-		}
-		http.SetCookie(w, &tok)
-		http.Redirect(w, r, "/loginfail", http.StatusTemporaryRedirect)
-	}
-}
-
-//	webhandler for displaying the failed login page; redirects after 5 seconds
-func LoginFailHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	RenderFileTemplate(w, "loginfail", db)
-}
-
-//	webhandler for logout; essentially just clears cookie
-func LogoutHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	tok := http.Cookie {
-		Name: "UserID",
-		Value: "",
-	}
-	http.SetCookie(w, &tok)
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-}
-
-//	webhandler for posting Twoots, will not post if text is longer than 100 chars
-func ComposeHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	switch r.Method {
-	case http.MethodGet:
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		case http.MethodPost:	
-		r.ParseForm()
-		if len(r.PostFormValue("twoot")) <= 100 {
-			tok, err := r.Cookie("UserID")
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-			author,err := strconv.Atoi(tok.Value)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-			AddTwoot(author, r.PostFormValue("twoot"), db)
-		}
-		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-	}
-}
-
-//	webhandler for registering users and detecting if username is already in use
-func RegisterHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	switch r.Method {
-	case http.MethodGet:
-		RenderFileTemplate(w, "register", db)
-	case http.MethodPost:
-		r.ParseForm()
-		invalid := false
-		if r.PostFormValue("username") == "" || r.PostFormValue("password") == "" {
-			invalid = true
-		} else {	
-			for _, usr := range db.Users {
-				if (*usr).Name == r.PostFormValue("username") {
-					invalid = true
-					break
-				}
-			}
-		}
-		if invalid {
-			http.Redirect(w, r, "/registerfail", http.StatusTemporaryRedirect)
-		} else {
-			AddUser(
-				r.PostFormValue("username"),
-				r.PostFormValue("password"),
-				r.PostFormValue("color"), 
-				db)
-			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		}
-	}
-}
-
-//	webhandler for displaying the failed register page; redirects after 5 seconds
-func RegisterFailHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	RenderFileTemplate(w, "regfail", db)
-}
-
-//	webhandler for followins a user
-func FollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	if err != nil {
-		fmt.Println(err)
-	}
-	authID, err := strconv.Atoi(session.Value)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	uID,_ := strconv.Atoi(r.URL.Path[len("/follow/"):])
-
-	Follow(authID, uID, db)
-
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-}
-
-//	webhandler for followins a user
-func UnfollowHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	if err != nil {
-		fmt.Println(err)
-	}
-	authID, err := strconv.Atoi(session.Value)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	uID,_ := strconv.Atoi(r.URL.Path[len("/unfollow/"):])
-
-	Unfollow(authID, uID, db)
-
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-}
-
-//	webhandler for Deleting User, also deletes all of their Twoots
-func DeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	if err != nil {
-		fmt.Println(err)
-	}
-	delID, err := strconv.Atoi(session.Value)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	DeleteUser(delID, db)
-
-	LogoutHandler(w, r, db)
-}
-
-
-//	webhandler for Deleting Twoot, also resorts their twoots
-func TDeleteHandler(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	if err != nil {
-		fmt.Println(err)
-	}
-	authID, err := strconv.Atoi(session.Value)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
-
-	if db.Twoots[tID].Author == authID {
-		fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
-		DeleteTwoot(tID, db)
-		//SortTwoots(&db.Users[authID].Twoots)
-	} else {
-		fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, db.Twoots[tID])
-	}
-	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-}
-
-//	function for sending out template for the client's timeline
-func RenderTimeline(w http.ResponseWriter, r *http.Request, db *FakeDB) {
-	session, err := r.Cookie("UserID")
-	var inst Instance
-	if err != nil {
-		fmt.Println(err)
-		inst = Instance{Client: nil, DB: db}
-	} else {
-		if session.Value == "" {
-			inst = Instance{Client: nil, DB: db}
-		} else {
-			tempID, _ := strconv.Atoi(session.Value)
-			tempUser := db.Users[tempID]
-			timeline := FollowFilter(tempUser.FollowList, db)
-			latest := *ReverseTwoots(db.Twoots)
-			inst = Instance{Client: tempUser, Timeline: timeline, Latest: latest, DB: db}
+func handleConnection(Connect net.Conn, db *FakeDB) {
+	// fmt.Println("begin handling");
+	// dec := gob.NewDecoder(Connect)
+	// var p [4]string
+	// err := dec.Decode(&p)
+	// if err != nil {
+	// 	fmt.Printf("decode error: %s\n", err)
+	// }
+	// fmt.Println(p);
+	scanner:= bufio.NewScanner(Connect)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Printf("received request: %s\n", line)
+		args :=  strings.Split(line, " ")
+		
+		switch args[0] {
+		case "Login":
+			fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
+		default:
+			fmt.Println("invalid request made: %s\n", args[0])
 		}
 	}
 
-	head, err := template.ParseFiles("header.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	content, err := template.ParseFiles("timeline.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	foot, err := template.ParseFiles("footer.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = head.Execute(w, inst)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	err = content.Execute(w, inst)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	err = foot.Execute(w, inst)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-}
-
-//	function for sending out specified template given its fname
-func RenderFileTemplate(w http.ResponseWriter, tmpl string, db *FakeDB) {
-	head, err := template.ParseFiles("header.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	content, err := template.ParseFiles(tmpl + ".html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	foot, err := template.ParseFiles("footer.html")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	err = head.Execute(w, *db)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	err = content.Execute(w, *db)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-	err = foot.Execute(w, *db)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
 }
 
 func main() {
 	db := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
-
-	// AddUser("Adam", "password", "#00afa0", &db)
-	// AddUser("Rick", "oo", "#859911", &db)
-	// AddUser("Ricardo", "pp", "#359890", &db)
-
-	// AddTwoot(0, "my last name is bouz", &db)
-	// AddTwoot(0, "what a nice day", &db)
-	// AddTwoot(0, "whats going on", &db)
-	// AddTwoot(1, "I like eggs", &db)
-	// AddTwoot(1, "did you see the game last night", &db)
-	// AddTwoot(1, "i know who im voting for in the election", &db)
-	// AddTwoot(2, "any movie recommendations", &db)
-	// AddTwoot(2, "the last episode of GOT was awesome", &db)
-	// AddTwoot(2, "check out this hilarious meme", &db)
-
-	// Follow(GetUserID("Adam", &db), GetUserID("Ricardo", &db), &db)
-
 	db.LoadDB()
 
-	http.HandleFunc("/", MakeDbHandler(BaseHandler, &db))
-	http.HandleFunc("/login", MakeDbHandler(LoginHandler, &db))
-	http.HandleFunc("/loginfail", MakeDbHandler(LoginFailHandler, &db))
-	http.HandleFunc("/logout", MakeDbHandler(LogoutHandler, &db))
-	http.HandleFunc("/post", MakeDbHandler(ComposeHandler, &db))
-	http.HandleFunc("/register", MakeDbHandler(RegisterHandler, &db))
-	http.HandleFunc("/registerfail", MakeDbHandler(RegisterFailHandler, &db))
-	http.HandleFunc("/follow/", MakeDbHandler(FollowHandler, &db))
-	http.HandleFunc("/unfollow/", MakeDbHandler(UnfollowHandler, &db))
-	http.HandleFunc("/delete", MakeDbHandler(DeleteHandler, &db))
-	http.HandleFunc("/tdelete/", MakeDbHandler(TDeleteHandler, &db))
+	req, err := net.Listen("tcp", ":8083")
+	
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer req.Close()
 
-	fmt.Println("Initializing Server . . .")
-	fmt.Println(http.ListenAndServe(":8080", nil))
+	for {
+		conn, err := req.Accept()
+		if err != nil {
+			fmt.Fprint(os.Stderr, "Failed to accept")
+			os.Exit(1)
+		}
+		fmt.Fprintln(os.Stderr, "accept successful")
+
+		handleConnection(conn, &db)
+
+		defer fmt.Fprintln(os.Stderr, "connection gone!")
+		defer conn.Close()
+	}
 }

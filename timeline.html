@@ -1,5 +1,4 @@
 {{$clientid := .Client.ID}}
-{{$users := .DB.Users}}
 <div class="compose-window">
 	<h2>Compose a Twoot:</h2>
 	<form id="compose-form" action="/post" method="POST">
@@ -14,7 +13,7 @@
 <div id="timeline" class="twoots-container">
 	<h3>Your Timeline</h3>
 	{{range $twoot1 := .Timeline}}
-	{{$tempAuth := index $users $twoot1.Author}}
+	{{$tempAuth := index .Users $twoot1.Author}}
 	<div class="twoot" style="background-color: {{$tempAuth.Color}}">
 		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
 		{{if ne $clientid $tempAuth.ID}}
@@ -31,7 +30,7 @@
 <div id="new" class="twoots-container">
 	<h3>New Tweets</h3>
 	{{range $twoot2 := .Latest}}
-	{{$tempAuth := index $users $twoot2.Author}}
+	{{$tempAuth := index .Users $twoot2.Author}}
 	<div class="twoot" style="background-color: {{$tempAuth.Color}}">	
 		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
 		{{if ne $clientid $tempAuth.ID}}
