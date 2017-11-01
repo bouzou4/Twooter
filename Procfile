@@ -1,2 +1,3 @@
-web: bin/web
-app: bin/app
+app: bin/appserver
+web: bin/webserver
+
