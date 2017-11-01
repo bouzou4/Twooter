@@ -1,2 +1,2 @@
-web: go run web.go
-app: go run app.go
+web: web
+app: app
