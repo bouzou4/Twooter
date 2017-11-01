@@ -2,3 +2,5 @@ Ref
 app
 Data
 Data copy
+bin/appserver
+bin/webserver
