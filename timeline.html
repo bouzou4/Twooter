@@ -19,13 +19,10 @@
 	<div class="twoot" style="background-color: {{$tempAuth.Color}}">
 		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
 		{{if ne $clientid $tempAuth.ID}}
-		<a href="/unfollow/{{$tempAuth.ID}}">Unfollow</a>
+		<a class="twoot-action no-anchor" href="/unfollow/{{$tempAuth.ID}}">Unfollow</a>
 		{{end}}
 		<span class="timestamp">{{$twoot1.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot1.Body}}</p>
-		{{if eq $clientid $tempAuth.ID}}
-		<a href="/tdelete/{{$twoot1.ID}}">Delete</a>
-		{{end}}
 	</div>
 	{{end}}
 </div>
@@ -36,12 +33,12 @@
 	<div class="twoot" style="background-color: {{$tempAuth.Color}}">	
 		<a href="localhost:8080/user/{{$tempAuth.ID}}" class="author-link no-anchor">{{$tempAuth.Name}}</a>
 		{{if ne $clientid $tempAuth.ID}}
-		<a href="/follow/{{$tempAuth.ID}}">Follow</a>
+		<a class="twoot-action no-anchor" href="/follow/{{$tempAuth.ID}}">Follow</a>
 		{{end}}
 		<span class="timestamp">{{$twoot2.Created.Format "Mon Jan 2 06 3:04"}}</span>
 		<p>{{$twoot2.Body}}</p>
 		{{if eq $clientid $tempAuth.ID}}
-		<a href="/tdelete/{{$twoot2.ID}}">Delete</a>
+		<a class="twoot-action no-anchor"href="/tdelete/{{$twoot2.ID}}">Delete</a>
 		{{end}}
 	</div>
 	{{end}}
