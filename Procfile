@@ -1,2 +1,2 @@
-web: web
-app: app
+web: bin/web
+app: bin/app
