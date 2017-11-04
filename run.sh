@@ -5,6 +5,7 @@ trap 'kill $(jobs -p)' SIGINT
 
 BASEDIR=$(dirname "$0")
 
+mkdir "$BASEDIR/bin"
 cd "$BASEDIR/bin"
 rm *
 go build -o appserver "$BASEDIR/src/appserver/app.go"
