@@ -27,7 +27,6 @@ type User struct {
 	Pass string
 	Color string
 	FollowList []int
-	// FollowedList []*User
 	Twoots []int
 }
 
@@ -39,7 +38,7 @@ type Twoot struct {
 }
 
 //	no fs yet so the database is held in memory meaning memory violations are always a hair away
-type FakeDB struct {
+type MemDB struct {
 	Users []*User
 	Twoots []*Twoot
 }
@@ -216,7 +215,7 @@ func (serv *AppServer) ServerRequest(args []string) string {
 	return ""
 }
 
-//	closure that returns a function that takes an http.ResponseWriter and http.Request and includes the FakeDB object
+//	closure that returns a function that takes an http.ResponseWriter and http.Request and includes the MemDB object
 func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *AppServer), serv *AppServer) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fn(w, r, serv)

@@ -19,14 +19,13 @@ import (
 //	regex to validate url request to be implemented soon(tm) 
 //	var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
-//	basic user struct with list of pointers to their created Twoots
+//	basic user struct with list of the IDs of their Twoots
 type User struct {
 	ID int
 	Name string
 	Pass string
 	Color string
 	FollowList []int
-	// FollowedList []*User
 	Twoots []int
 }
 
@@ -37,19 +36,21 @@ type Twoot struct {
 	Created time.Time
 }
 
-//	no fs yet so the database is held in memory meaning memory violations are always a hair away
-type FakeDB struct {
+//	memory representation of database
+type MemDB struct {
 	Users []*User
 	Twoots []*Twoot
 }
 
+//	instance for timeline template containing relevant information
 type Instance struct {
 	Client *User
 	Timeline []*Twoot
 	Latest []*Twoot
-	DB *FakeDB
+	DB *MemDB
 }
 
+//	takes in a path to a text file and returns a string array of each line
 func readLines(path string) []string {
 	f, err := os.Open(path);
 	if err != nil {
@@ -64,7 +65,8 @@ func readLines(path string) []string {
 	return lines
 }
 
-//	itirates over array to find element
+//	itirates over array of ints to find element
+// 	if found returns index otherwise returns -1
 func GetID(sli []int, x int) int {
 	for i, el := range sli {
 		if el == x {
@@ -74,7 +76,10 @@ func GetID(sli []int, x int) int {
 	return -1
 }
 
-func UserSearch(username string, db *FakeDB) int {
+
+//	searches for ID of user given their username
+// 	if found returns their ID otherwise returns -1
+func UserSearch(username string, db *MemDB) int {
 	for _, el := range db.Users {
 		if el.Name == username {
 			return el.ID
@@ -83,6 +88,7 @@ func UserSearch(username string, db *FakeDB) int {
 	return -1
 }
 
+//	reverses slice of Twoot pointers
 func ReverseTwoots(inp []*Twoot) *[]*Twoot {
 	ret := []*Twoot{}
 	for i := len(inp) - 1; i >= 0; i-- {
@@ -91,7 +97,8 @@ func ReverseTwoots(inp []*Twoot) *[]*Twoot {
 	return &ret
 }
 
-func (db *FakeDB) LoadDB() {
+// 	creates MemDB from file system
+func (db *MemDB) LoadDB() {
 	f, err := os.Open("Data/Index.txt"); 
 	if err == nil {
 		f.Close()
@@ -115,6 +122,7 @@ func (db *FakeDB) LoadDB() {
 	}
 }
 
+// 	creates User from passed index of User's file in file system
 func ParseUser(i int) *User {
 	lines := readLines(fmt.Sprintf("Data/Users/%d.txt", i))
 
@@ -146,7 +154,8 @@ func ParseUser(i int) *User {
 	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
-func (db *FakeDB) SaveUser(uID int, connector string) string {
+// 	encodes User object, given its ID, to a string with its field joined by specified connector
+func (db *MemDB) SaveUser(uID int, connector string) string {
 	usr := db.Users[uID]
 	data := strconv.Itoa(usr.ID) + connector + usr.Name + connector + usr.Pass + connector + usr.Color + connector
 
@@ -163,7 +172,8 @@ func (db *FakeDB) SaveUser(uID int, connector string) string {
 	return data
 }
 
-func (db *FakeDB) SendUsers() string {
+// returns all Users in database as an encoded string
+func (db *MemDB) SendUsers() string {
 	ret := ""
 	for _, usr := range db.Users {
 		ret += db.SaveUser(usr.ID, "|")
@@ -172,7 +182,8 @@ func (db *FakeDB) SendUsers() string {
 	return ret
 }
 
-func (db *FakeDB) WriteUsers() {
+// 	logs all users to the filesystem
+func (db *MemDB) WriteUsers() {
 	for _, usr := range db.Users {
 		tempPath := "Data/Users/" + strconv.Itoa(usr.ID) + ".txt"
 		f, err := os.Create(tempPath)
@@ -184,6 +195,7 @@ func (db *FakeDB) WriteUsers() {
 	}
 }
 
+// 	creates Twoot from passed index of Twoot's file in file system
 func ParseTwoot(i int) *Twoot {
 	lines := readLines(fmt.Sprintf("Data/Twoots/%d.txt", i))
 
@@ -194,12 +206,14 @@ func ParseTwoot(i int) *Twoot {
 	return &Twoot{ID: p1, Author: p2, Body: lines[2], Created: time.Unix(p4, 0)}
 }
 
-func (db *FakeDB) SaveTwoot(tID int, connector string) string {
+// 	encodes Twoot object, given its ID, to a string with its field joined by specified connector
+func (db *MemDB) SaveTwoot(tID int, connector string) string {
 	twt := db.Twoots[tID]
 	return strconv.Itoa(twt.ID) + connector + strconv.Itoa(twt.Author) + connector + twt.Body + connector + strconv.FormatInt(twt.Created.Unix(), 10) + connector
 }
 
-func (db *FakeDB) SendTwoots(reversed bool) string {
+// returns all Twoots in database as an encoded string
+func (db *MemDB) SendTwoots(reversed bool) string {
 	ret := ""
 	if !reversed {
 		for _, twt := range db.Twoots {
@@ -216,7 +230,8 @@ func (db *FakeDB) SendTwoots(reversed bool) string {
 	return ret
 }
 
-func (db *FakeDB) WriteTwoots() {
+// 	logs all twoots to the filesystem
+func (db *MemDB) WriteTwoots() {
 	for _, twt := range db.Twoots {
 		tempPath := "Data/Twoots/" + strconv.Itoa(twt.ID) + ".txt"
 		f, err := os.Create(tempPath)
@@ -228,7 +243,8 @@ func (db *FakeDB) WriteTwoots() {
 	}
 }
 
-func (db *FakeDB) WriteDB() {
+// 	writes all changes to database
+func (db *MemDB) WriteDB() {
 	var err error
 
 	fmt.Println("updating server . . .")
@@ -259,7 +275,7 @@ func (db *FakeDB) WriteDB() {
 
 //	adds a user to the database while storing their password as a hash
 //	returns UserID
-func AddUser(name string, pass string, color string, db *FakeDB) int {
+func AddUser(name string, pass string, color string, db *MemDB) int {
 	h := sha256.New()
 	h.Write([]byte(pass))
 	bs := hex.EncodeToString(h.Sum(nil))
@@ -281,7 +297,7 @@ func AddUser(name string, pass string, color string, db *FakeDB) int {
 
 //	creates and adds Twoot to the database
 //	returns TwootID
-func AddTwoot(author int, body string, db *FakeDB) int {
+func AddTwoot(author int, body string, db *MemDB) int {
 	tempID := len(db.Twoots)
 	tempAuth := db.Users[author]
 	tempTwoot := &Twoot{
@@ -298,7 +314,7 @@ func AddTwoot(author int, body string, db *FakeDB) int {
 	return tempID
 }
 
-func Follow(user int, following int, db *FakeDB) {
+func Follow(user int, following int, db *MemDB) {
 	if GetID(db.Users[user].FollowList, following) == -1 {
 		db.Users[user].FollowList = append(db.Users[user].FollowList, following)
 		db.WriteDB()
@@ -306,7 +322,7 @@ func Follow(user int, following int, db *FakeDB) {
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
-func Unfollow(user int, unfollowing int, db *FakeDB) {
+func Unfollow(user int, unfollowing int, db *MemDB) {
 	ind := GetID(db.Users[user].FollowList, unfollowing)
 	if ind != -1 {
 		copy(db.Users[user].FollowList[ind:], db.Users[user].FollowList[ind+1:])
@@ -319,7 +335,7 @@ func Unfollow(user int, unfollowing int, db *FakeDB) {
 }
 
 //	resets all IDs in a list of Twoots to their proper order
-func SortTwoots(list *[]*Twoot, db *FakeDB) {
+func SortTwoots(list *[]*Twoot, db *MemDB) {
 	for i, x := range *list {
 		x.ID = i
 	}
@@ -328,7 +344,7 @@ func SortTwoots(list *[]*Twoot, db *FakeDB) {
 }
 
 //	Used to remove a Twoot from the DB given it's ID
-func DeleteTwoot(dID int, db *FakeDB) {
+func DeleteTwoot(dID int, db *MemDB) {
 	fmt.Printf("looking for Twoot: %d\n", dID)
 	if db.Twoots[dID].ID == dID {
 		fmt.Print("deleting twoot: ")
@@ -348,7 +364,7 @@ func DeleteTwoot(dID int, db *FakeDB) {
 }
 
 //	Used to remove a User from the DB given their ID
-func DeleteUser(delID int, db *FakeDB) {
+func DeleteUser(delID int, db *MemDB) {
 	for i, x := range db.Users {
 		if x.ID == delID {
 			fmt.Printf("deleting user: %s\n", x.Name)
@@ -375,7 +391,7 @@ func DeleteUser(delID int, db *FakeDB) {
 
 //	function used to get userID from Username
 //	returns -1 if not found
-func GetUserID(username string, db *FakeDB) int {
+func GetUserID(username string, db *MemDB) int {
 	for _, usr := range db.Users {
 		if usr.Name == username {
 			return usr.ID
@@ -387,7 +403,7 @@ func GetUserID(username string, db *FakeDB) int {
 
 //	function used to check if username and password hash match up
 //	returns -1 if credentials are invalid
-func login(username string, hashed string, db *FakeDB) int {
+func login(username string, hashed string, db *MemDB) int {
 	uID := GetUserID(username, db)
 	if uID >= 0 && uID < len(db.Users) {
 		if hashed == db.Users[uID].Pass {
@@ -401,7 +417,7 @@ func login(username string, hashed string, db *FakeDB) int {
 	return -1
 }
 
-func handleConnection(Connect net.Conn, db *FakeDB) {
+func handleConnection(Connect net.Conn, db *MemDB) {
 	// fmt.Println("begin handling");
 	// dec := gob.NewDecoder(Connect)
 	// var p [4]string
@@ -480,7 +496,7 @@ func handleConnection(Connect net.Conn, db *FakeDB) {
 }
 
 func main() {
-	db := FakeDB{Users: []*User{}, Twoots: []*Twoot{}}
+	db := MemDB{Users: []*User{}, Twoots: []*Twoot{}}
 	db.LoadDB()
 
 	req, err := net.Listen("tcp", ":8083")
