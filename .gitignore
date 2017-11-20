@@ -1,6 +1,7 @@
 Ref
 app
 Data
-Data copy
+DataBKUP
+.idea
 bin/appserver
 bin/webserver
