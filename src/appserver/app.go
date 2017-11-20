@@ -85,11 +85,13 @@ func GetID(sli []int, x int) int {
 //	searches for ID of user given their username
 // 	if found returns their ID otherwise returns -1
 func UserSearch(username string, db *MemDB) int {
+	db.umut.Lock()
 	for _, el := range db.Users {
 		if el.Name == username {
 			return el.ID
 		}
 	}
+	db.umut.Unlock()
 	return -1
 }
 
@@ -180,10 +182,12 @@ func (db *MemDB) SaveUser(uID int, connector string) string {
 // returns all Users in database as an encoded string
 func (db *MemDB) SendUsers() string {
 	ret := ""
+	db.umut.Lock()
 	for _, usr := range db.Users {
 		ret += db.SaveUser(usr.ID, "|")
 		ret += "[|]"
 	}
+	db.umut.Unlock()
 	return ret
 }
 
@@ -221,15 +225,19 @@ func (db *MemDB) SaveTwoot(tID int, connector string) string {
 func (db *MemDB) SendTwoots(reversed bool) string {
 	ret := ""
 	if !reversed {
+		db.tmut.Lock()
 		for _, twt := range db.Twoots {
 			ret += db.SaveTwoot(twt.ID, "|")
 			ret += "[|]"
 		}
+		db.tmut.Unlock()
 	} else {
+		db.tmut.Lock()
 		for _, twt := range *ReverseTwoots(db.Twoots) {
 			ret += db.SaveTwoot(twt.ID, "|")
 			ret += "[|]"
 		}
+		db.tmut.Unlock()
 	}
 
 	return ret
@@ -285,6 +293,7 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 	h.Write([]byte(pass))
 	bs := hex.EncodeToString(h.Sum(nil))
 
+	db.umut.Lock()
 	tempID := len(db.Users)
 	tempUser := &User{
 		ID: tempID, 
@@ -295,6 +304,7 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 		Twoots: []int{},
 	}
 	db.Users = append(db.Users, tempUser)
+	db.umut.Unlock()
 
 	db.WriteDB()
 	return tempID
@@ -303,8 +313,12 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 //	creates and adds Twoot to the database
 //	returns TwootID
 func AddTwoot(author int, body string, db *MemDB) int {
+	db.tmut.Lock()
+	db.umut.Lock()
 	tempID := len(db.Twoots)
 	tempAuth := db.Users[author]
+	tempAuth.mut.Lock()
+	db.umut.Unlock()
 	tempTwoot := &Twoot{
 		ID: tempID, 
 		Author: author, 
@@ -312,8 +326,10 @@ func AddTwoot(author int, body string, db *MemDB) int {
 		Created: time.Now(),
 	}
 	
-	db.Twoots = append(db.Twoots, tempTwoot)
 	tempAuth.Twoots = append(tempAuth.Twoots, tempTwoot.ID)
+	tempAuth.mut.Unlock()
+	db.Twoots = append(db.Twoots, tempTwoot)
+	db.tmut.Unlock()
 
 	db.WriteDB()
 	return tempID
@@ -351,6 +367,7 @@ func SortTwoots(list *[]*Twoot, db *MemDB) {
 //	Used to remove a Twoot from the DB given it's ID
 func DeleteTwoot(dID int, db *MemDB) {
 	fmt.Printf("looking for Twoot: %d\n", dID)
+	db.tmut.Lock()
 	if db.Twoots[dID].ID == dID {
 		fmt.Print("deleting twoot: ")
 		fmt.Println(db.Twoots[dID])
@@ -365,6 +382,7 @@ func DeleteTwoot(dID int, db *MemDB) {
 		}
 	}
 	SortTwoots(&db.Twoots, db)
+	db.tmut.Unlock()
 	db.WriteDB()
 }
 
@@ -409,7 +427,9 @@ func GetUserID(username string, db *MemDB) int {
 //	function used to check if username and password hash match up
 //	returns -1 if credentials are invalid
 func login(username string, hashed string, db *MemDB) int {
+	db.umut.Lock()
 	uID := GetUserID(username, db)
+	defer db.umut.Unlock()
 	if uID >= 0 && uID < len(db.Users) {
 		if hashed == db.Users[uID].Pass {
 			fmt.Printf("User %s logged in\n", username)
@@ -443,27 +463,33 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetID":
 			if args[1] == "Users" {
 				id,_ := strconv.Atoi(args[2])
+				db.umut.Lock()
 				if !(id >= 0 && id < len(db.Users)) {
 					fmt.Fprintln(Connect, strconv.Itoa(id))
 				} else {
 					fmt.Fprintln(Connect, strconv.Itoa(-1))
 				}
+				db.umut.Unlock()
 			} else {
 				fmt.Fprintln(Connect, strconv.Itoa(-1))
 			}
 			
 		case "UserSearch":
-			fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
+			go fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
 		case "GetUser":
 			ind,_ := strconv.Atoi(args[1])
-			fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
+			db.umut.Lock()
+			go fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
+			db.umut.Unlock()
 		case "GetNumUsers":
-			fmt.Fprintln(Connect, len(db.Users))
+			go fmt.Fprintln(Connect, len(db.Users))
 		case "GetUsers":
 			go fmt.Fprintln(Connect, db.SendUsers())
 		case "GetTwoot":
 			ind,_ := strconv.Atoi(args[1])
-			fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
+			db.tmut.Lock()
+			go fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
+			db.tmut.Unlock()
 		case "GetNumTwoots":
 			go fmt.Fprintln(Connect, len(db.Twoots))
 		case "GetTwoots":
@@ -471,12 +497,12 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 			go fmt.Fprintln(Connect, db.SendTwoots(rev))
 		case "AddTwoot":
 			id,_ := strconv.Atoi(args[1])
-			fmt.Fprintln(Connect, strconv.Itoa(AddTwoot(id, args[2], db)))
+			go fmt.Fprintln(Connect, strconv.Itoa(AddTwoot(id, args[2], db)))
 		case "AddUser":
-			fmt.Fprintln(Connect, AddUser(args[1], args[2], args[3], db))
+			go fmt.Fprintln(Connect, AddUser(args[1], args[2], args[3], db))
 		case "DeleteTwoot":
 			ind,_ := strconv.Atoi(args[1])
-			DeleteTwoot(ind, db)
+			go DeleteTwoot(ind, db)
 			fmt.Fprintln(Connect, "Done")
 		case "DeleteUser":
 			ind,_ := strconv.Atoi(args[1])
