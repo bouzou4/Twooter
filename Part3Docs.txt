@@ -1,0 +1,5 @@
+Part 3:
+- added multithreading support by offloading all API calls (except getID) to goroutines
+- incorporated RWMutexes for the Users and Twoots slices into the Memdb, and in the User and Twoot objects
+- Used RWMutexes to prevent constant locking on read operations so that read routines are only halted by write routines and write ones are halted by both
+- 
