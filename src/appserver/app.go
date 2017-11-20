@@ -379,47 +379,54 @@ func SortTwoots(list *[]*Twoot, db *MemDB) {
 func DeleteTwoot(dID int, db *MemDB) {
 	fmt.Printf("looking for Twoot: %d\n", dID)
 	db.tmut.Lock()
-	if db.Twoots[dID].ID == dID {
-		fmt.Printf("deleting twoot: \n%s\n", db.Twoots[dID])
+	if dID >= 0 && dID < len(db.Twoots) {
+		if db.Twoots[dID].ID == dID {
+			fmt.Printf("deleting twoot: \n%s\n", db.Twoots[dID])
 
-		copy(db.Twoots[dID:], db.Twoots[dID + 1:])
-		db.Twoots[len(db.Twoots) - 1] = nil
-		db.Twoots = db.Twoots[:len(db.Twoots) - 1]
+			copy(db.Twoots[dID:], db.Twoots[dID + 1:])
+			db.Twoots[len(db.Twoots) - 1] = nil
+			db.Twoots = db.Twoots[:len(db.Twoots) - 1]
 
-		err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
-		if err != nil {
-			fmt.Println(err)
+			err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
+		SortTwoots(&db.Twoots, db)
 	}
-	SortTwoots(&db.Twoots, db)
 	db.tmut.Unlock()
 	db.WriteDB()
 }
 
 //	Used to remove a User from the DB given their ID
 func DeleteUser(delID int, db *MemDB) {
-	for i, x := range db.Users {
-		if x.ID == delID {
-			fmt.Printf("deleting user: %s\n", x.Name)
-			for _, y := range x.Twoots {
-				DeleteTwoot(y, db)
-			}
+	if delID >= 0 && delID < len(db.Users) {
+		db.umut.Lock()
+		for i, x := range db.Users {
+			if x.ID == delID {
+				x.mut.Lock()
+				fmt.Printf("deleting user: %s\n", x.Name)
+				for _, y := range x.Twoots {
+					DeleteTwoot(y, db)
+				}
+				x.mut.Unlock()
 
-			copy(db.Users[i:], db.Users[i + 1:])
-			db.Users[len(db.Users) - 1] = nil
-			db.Users = db.Users[:len(db.Users) - 1]
+				copy(db.Users[i:], db.Users[i + 1:])
+				db.Users[len(db.Users) - 1] = nil
+				db.Users = db.Users[:len(db.Users) - 1]
 
-			err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", len(db.Users)))
-			if err != nil {
-				fmt.Println(err)
+				err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", len(db.Users)))
+				if err != nil {
+					fmt.Println(err)
+				}
+			} else {
+				if GetID(x.FollowList, delID) != -1{
+					Unfollow(x.ID, delID, db)
+				}		
 			}
-		} else {
-			if GetID(x.FollowList, delID) != -1{
-				Unfollow(x.ID, delID, db)
-			}
+			db.umut.Unlock()
 		}
 	}
-	db.WriteDB()
 }
 
 //	function used to get userID from Username
@@ -474,12 +481,25 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 			if args[1] == "Users" {
 				id,_ := strconv.Atoi(args[2])
 				db.umut.RLock()
-				defer db.umut.RUnlock()
+				fmt.Println("got Users Lock")
 				if !(id >= 0 && id < len(db.Users)) {
 					fmt.Fprintln(Connect, strconv.Itoa(id))
 				} else {
 					fmt.Fprintln(Connect, strconv.Itoa(-1))
 				}
+				db.umut.RUnlock()
+				fmt.Println("gave up Users Lock")
+			} else if args[1] == "Twoots" {
+				id,_ := strconv.Atoi(args[2])
+				db.tmut.RLock()
+				fmt.Println("got Twoots Lock")
+				if !(id >= 0 && id < len(db.Twoots)) {
+					fmt.Fprintln(Connect, strconv.Itoa(id))
+				} else {
+					fmt.Fprintln(Connect, strconv.Itoa(-1))
+				}
+				db.tmut.RUnlock()
+				fmt.Println("goave upTwoots Lock")
 			} else {
 				fmt.Fprintln(Connect, strconv.Itoa(-1))
 			}
@@ -489,7 +509,7 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetUser":
 			ind,_ := strconv.Atoi(args[1])
 			db.umut.RLock()
-			go fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
+			fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
 			db.umut.RUnlock()
 		case "GetNumUsers":
 			go fmt.Fprintln(Connect, len(db.Users))
@@ -498,8 +518,7 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetTwoot":
 			ind,_ := strconv.Atoi(args[1])
 			db.tmut.RLock()
-			fmt.Printf("sending: %s\n", db.SaveTwoot(ind, "|"))
-			go fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
+			fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
 			db.tmut.RUnlock()
 		case "GetNumTwoots":
 			go fmt.Fprintln(Connect, len(db.Twoots))

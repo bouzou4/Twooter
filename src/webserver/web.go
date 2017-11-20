@@ -235,7 +235,7 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		if err != nil {
 			fmt.Println(err)
 			RenderFileTemplate(w, "login")
-		} else if serv.GetID("users", tempID) != -1 {
+		} else if serv.GetID("Users", tempID) != -1 {
 			RenderFileTemplate(w, "login")
 		} else {
 			RenderTimeline(w, r, serv)
@@ -402,15 +402,20 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	}
 
 	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
-	tempTwoot := serv.GetTwoot(tID)
+	if serv.GetID("Twoots", tID) != -1 {
+		tempTwoot := serv.GetTwoot(tID)
 
-	if tempTwoot.Author == authID {
-		fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
-		serv.DeleteTwoot(tID)
-		//SortTwoots(&db.Users[authID].Twoots)
+		if tempTwoot.Author == authID {
+			fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
+			serv.DeleteTwoot(tID)
+			//SortTwoots(&db.Users[authID].Twoots)
+		} else {
+			fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, tempTwoot)
+		}	
 	} else {
-		fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, tempTwoot)
+		fmt.Printf("client: %d attempted to delete invalid Twoot %d\n", authID, tID)
 	}
+
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
