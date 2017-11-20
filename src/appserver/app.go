@@ -2,62 +2,62 @@
 package main
 
 import (
-"fmt"
-"os"
-"bufio"
-// "io/ioutil"
-"sync"
-"net"
-// "regexp"
-"time"
-"strings"
-"strconv"
-"crypto/sha256"
-"encoding/hex"
-// "encoding/gob"
+	"bufio"
+	"fmt"
+	"os"
+	// "io/ioutil"
+	"net"
+	"sync"
+	// "regexp"
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
+	"strings"
+	"time"
+	// "encoding/gob"
 )
 
-//	regex to validate url request to be implemented soon(tm) 
+//	regex to validate url request to be implemented soon(tm)
 //	var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
 //	basic user struct with list of the IDs of their Twoots
 type User struct {
-	ID int
-	Name string
-	Pass string
-	Color string
+	ID         int
+	Name       string
+	Pass       string
+	Color      string
 	FollowList []int
-	Twoots []int
-	mut sync.RWMutex
+	Twoots     []int
+	mut        sync.RWMutex
 }
 
 type Twoot struct {
-	ID int
-	Author int
-	Body string
+	ID      int
+	Author  int
+	Body    string
 	Created time.Time
-	mut sync.RWMutex
+	mut     sync.RWMutex
 }
 
 //	memory representation of database
 type MemDB struct {
-	Users []*User
+	Users  []*User
 	Twoots []*Twoot
-	umut sync.RWMutex
-	tmut sync.RWMutex
+	umut   sync.RWMutex
+	tmut   sync.RWMutex
 }
 
 //	instance for timeline template containing relevant information
 type Instance struct {
-	Client *User
+	Client   *User
 	Timeline []*Twoot
-	Latest []*Twoot
-	DB *MemDB
+	Latest   []*Twoot
+	DB       *MemDB
 }
 
 //	takes in a path to a text file and returns a string array of each line
 func readLines(path string) []string {
-	f, err := os.Open(path);
+	f, err := os.Open(path)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -80,7 +80,6 @@ func GetID(sli []int, x int) int {
 	}
 	return -1
 }
-
 
 //	searches for ID of user given their username
 // 	if found returns their ID otherwise returns -1
@@ -106,14 +105,14 @@ func ReverseTwoots(inp []*Twoot) *[]*Twoot {
 
 // 	creates MemDB from file system
 func (db *MemDB) LoadDB() {
-	f, err := os.Open("Data/Index.txt"); 
+	f, err := os.Open("Data/Index.txt")
 	if err == nil {
 		f.Close()
 		lines := readLines("Data/Index.txt")
 		numUsers, err := strconv.Atoi(lines[1])
 		if err != nil {
 			fmt.Println(err)
-		} 
+		}
 		numTwoots, err := strconv.Atoi(lines[4])
 		if err != nil {
 			fmt.Println(err)
@@ -138,20 +137,20 @@ func ParseUser(i int) *User {
 	var p5 = []int{}
 	var p6 = []int{}
 
-	if lines[4] != ""	{
+	if lines[4] != "" {
 		follows := strings.Split(lines[4], " ")
-		follows = follows[:len(follows) - 1]
-		
+		follows = follows[:len(follows)-1]
+
 		for _, x := range follows {
 			y, _ := strconv.Atoi(x)
 			p5 = append(p5, y)
 		}
 	}
 
-	if lines[5] != ""	{
+	if lines[5] != "" {
 		twoots := strings.Split(lines[5], " ")
-		twoots = twoots[:len(twoots) - 1]
-		
+		twoots = twoots[:len(twoots)-1]
+
 		for _, x := range twoots {
 			y, _ := strconv.Atoi(x)
 			p6 = append(p6, y)
@@ -264,7 +263,7 @@ func (db *MemDB) WriteDB() {
 	var err error
 
 	fmt.Println("updating server . . .")
-	
+
 	err = os.MkdirAll("Data/Users", 0755)
 	if err != nil {
 		fmt.Println(err)
@@ -305,12 +304,12 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 	db.umut.Lock()
 	tempID := len(db.Users)
 	tempUser := &User{
-		ID: tempID, 
-		Name: name, 
-		Pass: bs, 
-		Color: color, 
+		ID:         tempID,
+		Name:       name,
+		Pass:       bs,
+		Color:      color,
 		FollowList: []int{},
-		Twoots: []int{},
+		Twoots:     []int{},
 	}
 	db.Users = append(db.Users, tempUser)
 	db.umut.Unlock()
@@ -332,12 +331,12 @@ func AddTwoot(author int, body string, db *MemDB) int {
 	tempAuth.mut.Lock()
 	fmt.Println("3")
 	tempTwoot := &Twoot{
-		ID: tempID, 
-		Author: author, 
-		Body: body,
+		ID:      tempID,
+		Author:  author,
+		Body:    body,
 		Created: time.Now(),
 	}
-	
+
 	tempAuth.Twoots = append(tempAuth.Twoots, tempTwoot.ID)
 	tempAuth.mut.Unlock()
 	db.Twoots = append(db.Twoots, tempTwoot)
@@ -383,9 +382,9 @@ func DeleteTwoot(dID int, db *MemDB) {
 		if db.Twoots[dID].ID == dID {
 			fmt.Printf("deleting twoot: \n%s\n", db.Twoots[dID])
 
-			copy(db.Twoots[dID:], db.Twoots[dID + 1:])
-			db.Twoots[len(db.Twoots) - 1] = nil
-			db.Twoots = db.Twoots[:len(db.Twoots) - 1]
+			copy(db.Twoots[dID:], db.Twoots[dID+1:])
+			db.Twoots[len(db.Twoots)-1] = nil
+			db.Twoots = db.Twoots[:len(db.Twoots)-1]
 
 			err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
 			if err != nil {
@@ -411,18 +410,18 @@ func DeleteUser(delID int, db *MemDB) {
 				}
 				x.mut.Unlock()
 
-				copy(db.Users[i:], db.Users[i + 1:])
-				db.Users[len(db.Users) - 1] = nil
-				db.Users = db.Users[:len(db.Users) - 1]
+				copy(db.Users[i:], db.Users[i+1:])
+				db.Users[len(db.Users)-1] = nil
+				db.Users = db.Users[:len(db.Users)-1]
 
 				err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", len(db.Users)))
 				if err != nil {
 					fmt.Println(err)
 				}
 			} else {
-				if GetID(x.FollowList, delID) != -1{
+				if GetID(x.FollowList, delID) != -1 {
 					Unfollow(x.ID, delID, db)
-				}		
+				}
 			}
 			db.umut.Unlock()
 		}
@@ -468,18 +467,18 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 	// 	fmt.Printf("decode error: %s\n", err)
 	// }
 	// fmt.Println(p);
-	scanner:= bufio.NewScanner(Connect)
+	scanner := bufio.NewScanner(Connect)
 	for scanner.Scan() {
 		line := scanner.Text()
 		fmt.Printf("received request: %s\n", strings.Join(strings.Split(line, "[}{]"), ", "))
-		args :=  strings.Split(line, "[}{]")
-		
+		args := strings.Split(line, "[}{]")
+
 		switch args[0] {
 		case "Login":
 			go fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
 		case "GetID":
 			if args[1] == "Users" {
-				id,_ := strconv.Atoi(args[2])
+				id, _ := strconv.Atoi(args[2])
 				db.umut.RLock()
 				fmt.Println("got Users Lock")
 				if !(id >= 0 && id < len(db.Users)) {
@@ -490,7 +489,7 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 				db.umut.RUnlock()
 				fmt.Println("gave up Users Lock")
 			} else if args[1] == "Twoots" {
-				id,_ := strconv.Atoi(args[2])
+				id, _ := strconv.Atoi(args[2])
 				db.tmut.RLock()
 				fmt.Println("got Twoots Lock")
 				if !(id >= 0 && id < len(db.Twoots)) {
@@ -503,11 +502,11 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 			} else {
 				fmt.Fprintln(Connect, strconv.Itoa(-1))
 			}
-			
+
 		case "UserSearch":
 			go fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
 		case "GetUser":
-			ind,_ := strconv.Atoi(args[1])
+			ind, _ := strconv.Atoi(args[1])
 			db.umut.RLock()
 			fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
 			db.umut.RUnlock()
@@ -516,42 +515,42 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetUsers":
 			go fmt.Fprintln(Connect, db.SendUsers())
 		case "GetTwoot":
-			ind,_ := strconv.Atoi(args[1])
+			ind, _ := strconv.Atoi(args[1])
 			db.tmut.RLock()
 			fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
 			db.tmut.RUnlock()
 		case "GetNumTwoots":
 			go fmt.Fprintln(Connect, len(db.Twoots))
 		case "GetTwoots":
-			rev,_ := strconv.ParseBool(args[1])
+			rev, _ := strconv.ParseBool(args[1])
 			go fmt.Fprintln(Connect, db.SendTwoots(rev))
 		case "AddTwoot":
-			id,_ := strconv.Atoi(args[1])
+			id, _ := strconv.Atoi(args[1])
 			go fmt.Fprintln(Connect, strconv.Itoa(AddTwoot(id, args[2], db)))
 		case "AddUser":
 			go fmt.Fprintln(Connect, AddUser(args[1], args[2], args[3], db))
 		case "DeleteTwoot":
-			ind,_ := strconv.Atoi(args[1])
+			ind, _ := strconv.Atoi(args[1])
 			go DeleteTwoot(ind, db)
 			fmt.Fprintln(Connect, "Done")
 		case "DeleteUser":
-			ind,_ := strconv.Atoi(args[1])
+			ind, _ := strconv.Atoi(args[1])
 			DeleteUser(ind, db)
 			fmt.Fprintln(Connect, "Done")
 		case "Follow":
-			ind1,_ := strconv.Atoi(args[1])
-			ind2,_ := strconv.Atoi(args[2])
+			ind1, _ := strconv.Atoi(args[1])
+			ind2, _ := strconv.Atoi(args[2])
 			db.umut.RLock()
 			go Follow(ind1, ind2, db)
 			db.umut.RUnlock()
 			fmt.Fprintln(Connect, "Done")
 		case "Unfollow":
-			ind1,_ := strconv.Atoi(args[1])
-			ind2,_ := strconv.Atoi(args[2])
+			ind1, _ := strconv.Atoi(args[1])
+			ind2, _ := strconv.Atoi(args[2])
 			db.umut.RLock()
 			go Unfollow(ind1, ind2, db)
 			db.umut.RUnlock()
-			fmt.Fprintln(Connect, "Done")	
+			fmt.Fprintln(Connect, "Done")
 
 		default:
 			fmt.Println("invalid request made: %s\n", args[0])
@@ -565,7 +564,7 @@ func main() {
 	db.LoadDB()
 
 	req, err := net.Listen("tcp", ":8083")
-	
+
 	if err != nil {
 		fmt.Println(err)
 	}
