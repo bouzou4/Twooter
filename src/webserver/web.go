@@ -290,6 +290,7 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		r.ParseForm()
 		if len(r.PostFormValue("twoot")) <= 100 {
 			tok, err := r.Cookie("UserID")
+			fmt.Println(tok)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}

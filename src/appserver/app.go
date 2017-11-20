@@ -28,7 +28,7 @@ type User struct {
 	Color string
 	FollowList []int
 	Twoots []int
-	mut sync.Mutex
+	mut sync.RWMutex
 }
 
 type Twoot struct {
@@ -36,15 +36,15 @@ type Twoot struct {
 	Author int
 	Body string
 	Created time.Time
-	mut sync.Mutex
+	mut sync.RWMutex
 }
 
 //	memory representation of database
 type MemDB struct {
 	Users []*User
 	Twoots []*Twoot
-	umut sync.Mutex
-	tmut sync.Mutex
+	umut sync.RWMutex
+	tmut sync.RWMutex
 }
 
 //	instance for timeline template containing relevant information
@@ -85,13 +85,13 @@ func GetID(sli []int, x int) int {
 //	searches for ID of user given their username
 // 	if found returns their ID otherwise returns -1
 func UserSearch(username string, db *MemDB) int {
-	db.umut.Lock()
+	db.umut.RLock()
 	for _, el := range db.Users {
 		if el.Name == username {
 			return el.ID
 		}
 	}
-	db.umut.Unlock()
+	db.umut.RUnlock()
 	return -1
 }
 
@@ -182,12 +182,12 @@ func (db *MemDB) SaveUser(uID int, connector string) string {
 // returns all Users in database as an encoded string
 func (db *MemDB) SendUsers() string {
 	ret := ""
-	db.umut.Lock()
+	db.umut.RLock()
 	for _, usr := range db.Users {
 		ret += db.SaveUser(usr.ID, "|")
 		ret += "[|]"
 	}
-	db.umut.Unlock()
+	db.umut.RUnlock()
 	return ret
 }
 
@@ -217,27 +217,30 @@ func ParseTwoot(i int) *Twoot {
 
 // 	encodes Twoot object, given its ID, to a string with its field joined by specified connector
 func (db *MemDB) SaveTwoot(tID int, connector string) string {
-	twt := db.Twoots[tID]
-	return strconv.Itoa(twt.ID) + connector + strconv.Itoa(twt.Author) + connector + twt.Body + connector + strconv.FormatInt(twt.Created.Unix(), 10) + connector
+	if tID >= 0 && tID < len(db.Twoots) {
+		twt := db.Twoots[tID]
+		return strconv.Itoa(twt.ID) + connector + strconv.Itoa(twt.Author) + connector + twt.Body + connector + strconv.FormatInt(twt.Created.Unix(), 10) + connector
+	}
+	return ""
 }
 
 // returns all Twoots in database as an encoded string
 func (db *MemDB) SendTwoots(reversed bool) string {
 	ret := ""
 	if !reversed {
-		db.tmut.Lock()
+		db.tmut.RLock()
 		for _, twt := range db.Twoots {
 			ret += db.SaveTwoot(twt.ID, "|")
 			ret += "[|]"
 		}
-		db.tmut.Unlock()
+		db.tmut.RUnlock()
 	} else {
-		db.tmut.Lock()
+		db.tmut.RLock()
 		for _, twt := range *ReverseTwoots(db.Twoots) {
 			ret += db.SaveTwoot(twt.ID, "|")
 			ret += "[|]"
 		}
-		db.tmut.Unlock()
+		db.tmut.RUnlock()
 	}
 
 	return ret
@@ -266,13 +269,19 @@ func (db *MemDB) WriteDB() {
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("getting user lock . . .")
+	db.umut.RLock()
 	db.WriteUsers()
+	db.umut.RUnlock()
 
 	err = os.MkdirAll("Data/Twoots", 0755)
 	if err != nil {
 		fmt.Println(err)
 	}
+	fmt.Println("getting twoot lock . . .")
+	db.tmut.RLock()
 	db.WriteTwoots()
+	db.tmut.RUnlock()
 
 	index, err := os.Create("Data/Index.txt")
 	if err != nil {
@@ -314,11 +323,14 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 //	returns TwootID
 func AddTwoot(author int, body string, db *MemDB) int {
 	db.tmut.Lock()
-	db.umut.Lock()
+	fmt.Println("1")
+	db.umut.RLock()
+	fmt.Println("2")
 	tempID := len(db.Twoots)
 	tempAuth := db.Users[author]
+	db.umut.RUnlock()
 	tempAuth.mut.Lock()
-	db.umut.Unlock()
+	fmt.Println("3")
 	tempTwoot := &Twoot{
 		ID: tempID, 
 		Author: author, 
@@ -360,7 +372,6 @@ func SortTwoots(list *[]*Twoot, db *MemDB) {
 	for i, x := range *list {
 		x.ID = i
 	}
-	db.WriteDB()
 	fmt.Println("sorted twoots")
 }
 
@@ -369,8 +380,7 @@ func DeleteTwoot(dID int, db *MemDB) {
 	fmt.Printf("looking for Twoot: %d\n", dID)
 	db.tmut.Lock()
 	if db.Twoots[dID].ID == dID {
-		fmt.Print("deleting twoot: ")
-		fmt.Println(db.Twoots[dID])
+		fmt.Printf("deleting twoot: \n%s\n", db.Twoots[dID])
 
 		copy(db.Twoots[dID:], db.Twoots[dID + 1:])
 		db.Twoots[len(db.Twoots) - 1] = nil
@@ -427,9 +437,9 @@ func GetUserID(username string, db *MemDB) int {
 //	function used to check if username and password hash match up
 //	returns -1 if credentials are invalid
 func login(username string, hashed string, db *MemDB) int {
-	db.umut.Lock()
+	db.umut.RLock()
 	uID := GetUserID(username, db)
-	defer db.umut.Unlock()
+	defer db.umut.RUnlock()
 	if uID >= 0 && uID < len(db.Users) {
 		if hashed == db.Users[uID].Pass {
 			fmt.Printf("User %s logged in\n", username)
@@ -463,13 +473,13 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetID":
 			if args[1] == "Users" {
 				id,_ := strconv.Atoi(args[2])
-				db.umut.Lock()
+				db.umut.RLock()
+				defer db.umut.RUnlock()
 				if !(id >= 0 && id < len(db.Users)) {
 					fmt.Fprintln(Connect, strconv.Itoa(id))
 				} else {
 					fmt.Fprintln(Connect, strconv.Itoa(-1))
 				}
-				db.umut.Unlock()
 			} else {
 				fmt.Fprintln(Connect, strconv.Itoa(-1))
 			}
@@ -478,18 +488,19 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 			go fmt.Fprintln(Connect, strconv.Itoa(UserSearch(args[1], db)))
 		case "GetUser":
 			ind,_ := strconv.Atoi(args[1])
-			db.umut.Lock()
+			db.umut.RLock()
 			go fmt.Fprintln(Connect, db.SaveUser(ind, "|"))
-			db.umut.Unlock()
+			db.umut.RUnlock()
 		case "GetNumUsers":
 			go fmt.Fprintln(Connect, len(db.Users))
 		case "GetUsers":
 			go fmt.Fprintln(Connect, db.SendUsers())
 		case "GetTwoot":
 			ind,_ := strconv.Atoi(args[1])
-			db.tmut.Lock()
+			db.tmut.RLock()
+			fmt.Printf("sending: %s\n", db.SaveTwoot(ind, "|"))
 			go fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
-			db.tmut.Unlock()
+			db.tmut.RUnlock()
 		case "GetNumTwoots":
 			go fmt.Fprintln(Connect, len(db.Twoots))
 		case "GetTwoots":
@@ -511,16 +522,16 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "Follow":
 			ind1,_ := strconv.Atoi(args[1])
 			ind2,_ := strconv.Atoi(args[2])
-			db.umut.Lock()
+			db.umut.RLock()
 			go Follow(ind1, ind2, db)
-			db.umut.Unlock()
+			db.umut.RUnlock()
 			fmt.Fprintln(Connect, "Done")
 		case "Unfollow":
 			ind1,_ := strconv.Atoi(args[1])
 			ind2,_ := strconv.Atoi(args[2])
-			db.umut.Lock()
+			db.umut.RLock()
 			go Unfollow(ind1, ind2, db)
-			db.umut.Unlock()
+			db.umut.RUnlock()
 			fmt.Fprintln(Connect, "Done")	
 
 		default:
