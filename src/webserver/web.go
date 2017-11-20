@@ -230,7 +230,6 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		fmt.Println(err)
 		RenderFileTemplate(w, "login")
 	} else {
-
 		tempID, err := strconv.Atoi(session.Value)
 		if err != nil {
 			fmt.Println(err)
@@ -307,7 +306,13 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 func RegisterHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	switch r.Method {
 	case http.MethodGet:
-		RenderFileTemplate(w, "register")
+		session, err := r.Cookie("UserID")
+		tempID, err := strconv.Atoi(session.Value)
+		if err != nil || tempID == -1 {
+			RenderFileTemplate(w, "register")
+		} else {
+			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
+		}
 	case http.MethodPost:
 		r.ParseForm()
 
