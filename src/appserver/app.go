@@ -511,12 +511,16 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "Follow":
 			ind1,_ := strconv.Atoi(args[1])
 			ind2,_ := strconv.Atoi(args[2])
-			Follow(ind1, ind2, db)
+			db.umut.Lock()
+			go Follow(ind1, ind2, db)
+			db.umut.Unlock()
 			fmt.Fprintln(Connect, "Done")
 		case "Unfollow":
 			ind1,_ := strconv.Atoi(args[1])
 			ind2,_ := strconv.Atoi(args[2])
-			Unfollow(ind1, ind2, db)
+			db.umut.Lock()
+			go Unfollow(ind1, ind2, db)
+			db.umut.Unlock()
 			fmt.Fprintln(Connect, "Done")	
 
 		default:
