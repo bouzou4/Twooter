@@ -439,7 +439,7 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		
 		switch args[0] {
 		case "Login":
-			fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
+			go fmt.Fprintln(Connect, strconv.Itoa(login(args[1], args[2], db)))
 		case "GetID":
 			if args[1] == "Users" {
 				id,_ := strconv.Atoi(args[2])
@@ -460,15 +460,15 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 		case "GetNumUsers":
 			fmt.Fprintln(Connect, len(db.Users))
 		case "GetUsers":
-			fmt.Fprintln(Connect, db.SendUsers())
+			go fmt.Fprintln(Connect, db.SendUsers())
 		case "GetTwoot":
 			ind,_ := strconv.Atoi(args[1])
 			fmt.Fprintln(Connect, db.SaveTwoot(ind, "|"))
 		case "GetNumTwoots":
-			fmt.Fprintln(Connect, len(db.Twoots))
+			go fmt.Fprintln(Connect, len(db.Twoots))
 		case "GetTwoots":
 			rev,_ := strconv.ParseBool(args[1])
-			fmt.Fprintln(Connect, db.SendTwoots(rev))
+			go fmt.Fprintln(Connect, db.SendTwoots(rev))
 		case "AddTwoot":
 			id,_ := strconv.Atoi(args[1])
 			fmt.Fprintln(Connect, strconv.Itoa(AddTwoot(id, args[2], db)))
