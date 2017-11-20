@@ -6,6 +6,7 @@ import (
 "os"
 "bufio"
 // "io/ioutil"
+"sync"
 "net"
 // "regexp"
 "time"
@@ -27,6 +28,7 @@ type User struct {
 	Color string
 	FollowList []int
 	Twoots []int
+	mut sync.Mutex
 }
 
 type Twoot struct {
@@ -34,12 +36,15 @@ type Twoot struct {
 	Author int
 	Body string
 	Created time.Time
+	mut sync.Mutex
 }
 
 //	memory representation of database
 type MemDB struct {
 	Users []*User
 	Twoots []*Twoot
+	umut sync.Mutex
+	tmut sync.Mutex
 }
 
 //	instance for timeline template containing relevant information
