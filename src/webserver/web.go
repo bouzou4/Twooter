@@ -2,59 +2,58 @@
 package main
 
 import (
-"fmt"
-"os"
-"net"
-"net/http"
-"html/template"
-// "regexp"
-"time"
-"strings"
-"strconv"
-"crypto/sha256"
-"encoding/hex"
-// "encoding/gob"
-"bufio"
+	"fmt"
+	"html/template"
+	"net"
+	"net/http"
+	"os"
+	// "regexp"
+	"crypto/sha256"
+	"encoding/hex"
+	"strconv"
+	"strings"
+	"time"
+	// "encoding/gob"
+	"bufio"
 )
 
-//	regex to validate url request to be implemented soon(tm) 
+//	regex to validate url request to be implemented soon(tm)
 //	var validPath = regexp.MustCompile("^/(edit|save|view)/([a-zA-Z0-9]+)$")
 
 //	basic user struct with list of pointers to their created Twoots
 type User struct {
-	ID int
-	Name string
-	Pass string
-	Color string
+	ID         int
+	Name       string
+	Pass       string
+	Color      string
 	FollowList []int
-	Twoots []int
+	Twoots     []int
 }
 
 type Twoot struct {
-	ID int
-	Author int
-	Body string
+	ID      int
+	Author  int
+	Body    string
 	Created time.Time
 }
 
 //	no fs yet so the database is held in memory meaning memory violations are always a hair away
 type MemDB struct {
-	Users []*User
+	Users  []*User
 	Twoots []*Twoot
 }
 
 type Instance struct {
-	Client *User
+	Client   *User
 	Timeline []*Twoot
-	Latest []*Twoot
-	Users []*User
+	Latest   []*Twoot
+	Users    []*User
 }
 
 type AppServer struct {
 	Connect net.Conn
-	Scanr *bufio.Scanner
+	Scanr   *bufio.Scanner
 }
-
 
 func ParseUser(msg string) *User {
 	lines := strings.Split(msg, "|")
@@ -64,20 +63,20 @@ func ParseUser(msg string) *User {
 	var p5 = []int{}
 	var p6 = []int{}
 
-	if lines[4] != ""	{
+	if lines[4] != "" {
 		follows := strings.Split(lines[4], " ")
-		follows = follows[:len(follows) - 1]
-		
+		follows = follows[:len(follows)-1]
+
 		for _, x := range follows {
 			y, _ := strconv.Atoi(x)
 			p5 = append(p5, y)
 		}
 	}
 
-	if lines[5] != ""	{
+	if lines[5] != "" {
 		twoots := strings.Split(lines[5], " ")
-		twoots = twoots[:len(twoots) - 1]
-		
+		twoots = twoots[:len(twoots)-1]
+
 		for _, x := range twoots {
 			y, _ := strconv.Atoi(x)
 			p6 = append(p6, y)
@@ -134,7 +133,7 @@ func (serv *AppServer) GetNumUsers() int {
 func (serv *AppServer) GetUsers() []*User {
 	ret := []*User{}
 	lines := strings.Split(serv.ServerRequest([]string{"GetUsers"}), "[|]")
-	for _,line := range  lines[:len(lines) - 1]{
+	for _, line := range lines[:len(lines)-1] {
 		ret = append(ret, ParseUser(line))
 	}
 	return ret
@@ -152,7 +151,7 @@ func (serv *AppServer) GetNumTwoots() int {
 func (serv *AppServer) GetTwoots(reversed bool) []*Twoot {
 	ret := []*Twoot{}
 	lines := strings.Split(serv.ServerRequest([]string{"GetTwoots", strconv.FormatBool(reversed)}), "[|]")
-	for _,line := range  lines[:len(lines) - 1]{
+	for _, line := range lines[:len(lines)-1] {
 		ret = append(ret, ParseTwoot(line))
 	}
 	return ret
@@ -203,15 +202,15 @@ func (serv *AppServer) ServerRequest(args []string) string {
 	// 	fmt.Printf("decode error: %s\n", err)
 	// }
 
-	fmt.Fprintln(serv.Connect, strings.Join(args[:],"[}{]")) 
+	fmt.Fprintln(serv.Connect, strings.Join(args[:], "[}{]"))
 
-	scanner:= bufio.NewScanner(serv.Connect)
+	scanner := bufio.NewScanner(serv.Connect)
 	for scanner.Scan() {
 		line := scanner.Text()
 		// fmt.Printf("server response to %s request: %s\n", args[0], line)
 		return line
 		break
-	}		
+	}
 	return ""
 }
 
@@ -222,7 +221,7 @@ func MakeDbHandler(fn func(http.ResponseWriter, *http.Request, *AppServer), serv
 	}
 }
 
-//	webhandler for the homepage, if the user is logged in then they get their timeline 
+//	webhandler for the homepage, if the user is logged in then they get their timeline
 //	otherwise they get the login page
 func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	session, err := r.Cookie("UserID")
@@ -234,7 +233,7 @@ func BaseHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		if err != nil {
 			fmt.Println(err)
 			RenderFileTemplate(w, "login")
-		} else if serv.GetID("users", tempID) != -1 {
+		} else if serv.GetID("Users", tempID) != -1 {
 			RenderFileTemplate(w, "login")
 		} else {
 			RenderTimeline(w, r, serv)
@@ -248,16 +247,16 @@ func LoginHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	cookID := serv.Login(r.PostFormValue("username"), r.PostFormValue("password"))
 	fmt.Println("Login Post Request\ncookie value: " + strconv.Itoa(cookID))
 	if cookID != -1 {
-		tok := http.Cookie {
-			Name: "UserID",
-			Value: strconv.Itoa(cookID),
+		tok := http.Cookie{
+			Name:    "UserID",
+			Value:   strconv.Itoa(cookID),
 			Expires: time.Now().Add(1 * time.Hour),
 		}
 		http.SetCookie(w, &tok)
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 	} else {
-		tok := http.Cookie {
-			Name: "UserID",
+		tok := http.Cookie{
+			Name:  "UserID",
 			Value: "",
 		}
 		http.SetCookie(w, &tok)
@@ -272,8 +271,8 @@ func LoginFailHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 
 //	webhandler for logout; essentially just clears cookie
 func LogoutHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
-	tok := http.Cookie {
-		Name: "UserID",
+	tok := http.Cookie{
+		Name:  "UserID",
 		Value: "",
 	}
 	http.SetCookie(w, &tok)
@@ -285,14 +284,15 @@ func ComposeHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	switch r.Method {
 	case http.MethodGet:
 		http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
-		case http.MethodPost:	
+	case http.MethodPost:
 		r.ParseForm()
 		if len(r.PostFormValue("twoot")) <= 100 {
 			tok, err := r.Cookie("UserID")
+			fmt.Println(tok)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
-			author,err := strconv.Atoi(tok.Value)
+			author, err := strconv.Atoi(tok.Value)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 			}
@@ -330,7 +330,7 @@ func RegisterHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 				r.PostFormValue("username"),
 				r.PostFormValue("password"),
 				r.PostFormValue("color"),
-				)
+			)
 			http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 		}
 	}
@@ -352,7 +352,7 @@ func FollowHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		fmt.Println(err)
 	}
 
-	uID,_ := strconv.Atoi(r.URL.Path[len("/follow/"):])
+	uID, _ := strconv.Atoi(r.URL.Path[len("/follow/"):])
 
 	serv.Follow(authID, uID)
 
@@ -370,7 +370,7 @@ func UnfollowHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		fmt.Println(err)
 	}
 
-	uID,_ := strconv.Atoi(r.URL.Path[len("/unfollow/"):])
+	uID, _ := strconv.Atoi(r.URL.Path[len("/unfollow/"):])
 
 	serv.Unfollow(authID, uID)
 
@@ -393,7 +393,6 @@ func DeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	LogoutHandler(w, r, serv)
 }
 
-
 //	webhandler for Deleting Twoot, also resorts their twoots
 func TDeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 	session, err := r.Cookie("UserID")
@@ -405,16 +404,21 @@ func TDeleteHandler(w http.ResponseWriter, r *http.Request, serv *AppServer) {
 		fmt.Println(err)
 	}
 
-	tID,_ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
-	tempTwoot := serv.GetTwoot(tID)
+	tID, _ := strconv.Atoi(r.URL.Path[len("/tdelete/"):])
+	if serv.GetID("Twoots", tID) != -1 {
+		tempTwoot := serv.GetTwoot(tID)
 
-	if tempTwoot.Author == authID {
-		fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
-		serv.DeleteTwoot(tID)
-		//SortTwoots(&db.Users[authID].Twoots)
+		if tempTwoot.Author == authID {
+			fmt.Printf("client %d is deleting TwootID: %d\n", authID, tID)
+			serv.DeleteTwoot(tID)
+			//SortTwoots(&db.Users[authID].Twoots)
+		} else {
+			fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, tempTwoot)
+		}
 	} else {
-		fmt.Printf("client: %d attempted to delete invalid Twoot %s\n", authID, tempTwoot)
+		fmt.Printf("client: %d attempted to delete invalid Twoot %d\n", authID, tID)
 	}
+
 	http.Redirect(w, r, "/", http.StatusTemporaryRedirect)
 }
 
