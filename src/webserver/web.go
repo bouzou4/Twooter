@@ -30,6 +30,7 @@ type User struct {
 	Twoots     []int
 }
 
+//basic twoot struct for representing twoots
 type Twoot struct {
 	ID      int
 	Author  int
@@ -43,6 +44,7 @@ type MemDB struct {
 	Twoots []*Twoot
 }
 
+// 	Instance struct to provide templates with necessary data
 type Instance struct {
 	Client   *User
 	Timeline []*Twoot
@@ -50,11 +52,13 @@ type Instance struct {
 	Users    []*User
 }
 
+//	app server struct to make api calls easier
 type AppServer struct {
 	Connect net.Conn
 	Scanr   *bufio.Scanner
 }
 
+// 	takes serialized string from app server and creates pointer to user object
 func ParseUser(msg string) *User {
 	lines := strings.Split(msg, "|")
 
@@ -86,6 +90,7 @@ func ParseUser(msg string) *User {
 	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
 }
 
+// 	takes serialized string from app server and creates pointer to twoot object
 func ParseTwoot(msg string) *Twoot {
 	lines := strings.Split(msg, "|")
 
@@ -111,25 +116,32 @@ func FollowFilter(follows []int, twts []*Twoot) []*Twoot {
 	return timeline
 }
 
+// 	api request for id from relevant list (either users or twoots)
+// 	returns -1 if not found
 func (serv *AppServer) GetID(list string, val int) int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetID", list, strconv.Itoa(val)}))
 	return ret
 }
 
+// 	api request for id from username
+// 	returns -1 if not found
 func (serv *AppServer) UserSearch(username string) int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"UserSearch", username}))
 	return ret
 }
 
+// 	api request for user object given their id
 func (serv *AppServer) GetUser(uID int) User {
 	return *ParseUser(serv.ServerRequest([]string{"GetUser", strconv.Itoa(uID)}))
 }
 
+// 	api request for number of users in db
 func (serv *AppServer) GetNumUsers() int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetNumUsers"}))
 	return ret
 }
 
+// 	api request for list of all users in db
 func (serv *AppServer) GetUsers() []*User {
 	ret := []*User{}
 	lines := strings.Split(serv.ServerRequest([]string{"GetUsers"}), "[|]")
@@ -139,15 +151,18 @@ func (serv *AppServer) GetUsers() []*User {
 	return ret
 }
 
+// 	api request for twoot object given its id
 func (serv *AppServer) GetTwoot(tID int) Twoot {
 	return *ParseTwoot(serv.ServerRequest([]string{"GetTwoot", strconv.Itoa(tID)}))
 }
 
+// 	api request for number of twoots in db
 func (serv *AppServer) GetNumTwoots() int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"GetNumTwoots"}))
 	return ret
 }
 
+// 	api request for list of all twoots in db
 func (serv *AppServer) GetTwoots(reversed bool) []*Twoot {
 	ret := []*Twoot{}
 	lines := strings.Split(serv.ServerRequest([]string{"GetTwoots", strconv.FormatBool(reversed)}), "[|]")
@@ -157,6 +172,8 @@ func (serv *AppServer) GetTwoots(reversed bool) []*Twoot {
 	return ret
 }
 
+// 	api call for login that hashes password
+// 	returns id if correct or -1 if incorrect
 func (serv *AppServer) Login(username string, password string) int {
 	h := sha256.New()
 	h.Write([]byte(password))
@@ -165,37 +182,49 @@ func (serv *AppServer) Login(username string, password string) int {
 	return ret
 }
 
+// 	api call for posting twoot
 func (serv *AppServer) AddTwoot(author int, body string) int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"AddTwoot", strconv.Itoa(author), body}))
 	return ret
 }
 
+//	api call for registering user
+// 	returns id if succesful or -1 if it fails
 func (serv *AppServer) AddUser(name string, pass string, color string) int {
 	ret, _ := strconv.Atoi(serv.ServerRequest([]string{"AddUser", name, pass, color}))
 	return ret
 }
 
+//	api call for deleting twoot
 func (serv *AppServer) DeleteTwoot(dID int) {
 	serv.ServerRequest([]string{"DeleteTwoot", strconv.Itoa(dID)})
 }
 
+//	api call for deleting user
 func (serv *AppServer) DeleteUser(delID int) {
 	serv.ServerRequest([]string{"DeleteUser", strconv.Itoa(delID)})
 }
 
+//	api call for following user
 func (serv *AppServer) Follow(user int, following int) {
 	serv.ServerRequest([]string{"Follow", strconv.Itoa(user), strconv.Itoa(following)})
 }
 
+//	api call for unfollowing user
 func (serv *AppServer) Unfollow(user int, unfollowing int) {
 	serv.ServerRequest([]string{"Unfollow", strconv.Itoa(user), strconv.Itoa(unfollowing)})
 }
 
-func (serv *AppServer) FollowFilter(uID int) []*Twoot {
-	return []*Twoot{}
-}
+// 		TODO: offload filtering of twoots to app server for RenderTimeline
+// func (serv *AppServer) FollowFilter(uID int) []*Twoot {
+// 	return []*Twoot{}
+// }
 
+// 	general function for making api calls to app server
+// 	takes arguments as list of strings where the first is reserved for the actual request
+// 	returns serialized string from app server to be parsed
 func (serv *AppServer) ServerRequest(args []string) string {
+	// 		TODO: Figure out why gob doesnt work with the structs
 	// encoder := gob.NewEncoder(serv.Connect)
 	// err := encoder.Encode(args)
 	// if err != nil {

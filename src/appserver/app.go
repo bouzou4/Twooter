@@ -31,6 +31,7 @@ type User struct {
 	mut        sync.RWMutex
 }
 
+//basic twoot struct for representing twoots
 type Twoot struct {
 	ID      int
 	Author  int
@@ -346,6 +347,7 @@ func AddTwoot(author int, body string, db *MemDB) int {
 	return tempID
 }
 
+// 	checks if user is following another user and if not appends them to their follow list
 func Follow(user int, following int, db *MemDB) {
 	if GetID(db.Users[user].FollowList, following) == -1 {
 		db.Users[user].FollowList = append(db.Users[user].FollowList, following)
@@ -354,6 +356,7 @@ func Follow(user int, following int, db *MemDB) {
 	// db.Users[following].FollowedList = append(db.Users[following].FollowedList, db.Users[user])
 }
 
+// 	checks if user is following another user and if so removes them from their follow list
 func Unfollow(user int, unfollowing int, db *MemDB) {
 	ind := GetID(db.Users[user].FollowList, unfollowing)
 	if ind != -1 {
@@ -398,6 +401,8 @@ func DeleteTwoot(dID int, db *MemDB) {
 }
 
 //	Used to remove a User from the DB given their ID
+// 	also removes their tweets from the database
+// 	aswell as their ids from other users' follow lists
 func DeleteUser(delID int, db *MemDB) {
 	if delID >= 0 && delID < len(db.Users) {
 		db.umut.Lock()
@@ -458,6 +463,9 @@ func login(username string, hashed string, db *MemDB) int {
 	return -1
 }
 
+// 	general handler for all requests to app server
+// 	uses basic switch statement to decide which function to call
+// 	passes response back to caller as serialized string through TCP
 func handleConnection(Connect net.Conn, db *MemDB) {
 	// fmt.Println("begin handling");
 	// dec := gob.NewDecoder(Connect)
