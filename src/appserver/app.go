@@ -27,7 +27,6 @@ type User struct {
 	Pass       string
 	Color      string
 	FollowList []int
-	Twoots     []int
 	mut        sync.RWMutex
 }
 
@@ -136,7 +135,6 @@ func ParseUser(i int) *User {
 	p1, _ := strconv.Atoi(lines[0])
 
 	var p5 = []int{}
-	var p6 = []int{}
 
 	if lines[4] != "" {
 		follows := strings.Split(lines[4], " ")
@@ -148,17 +146,7 @@ func ParseUser(i int) *User {
 		}
 	}
 
-	if lines[5] != "" {
-		twoots := strings.Split(lines[5], " ")
-		twoots = twoots[:len(twoots)-1]
-
-		for _, x := range twoots {
-			y, _ := strconv.Atoi(x)
-			p6 = append(p6, y)
-		}
-	}
-
-	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
+	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5}
 }
 
 // 	encodes User object, given its ID, to a string with its field joined by specified connector
@@ -168,11 +156,6 @@ func (db *MemDB) SaveUser(uID int, connector string) string {
 
 	for _, usr := range usr.FollowList {
 		data += strconv.Itoa(usr) + " "
-	}
-	data += connector
-
-	for _, twt := range usr.Twoots {
-		data += strconv.Itoa(twt) + " "
 	}
 	data += connector
 
@@ -310,7 +293,6 @@ func AddUser(name string, pass string, color string, db *MemDB) int {
 		Pass:       bs,
 		Color:      color,
 		FollowList: []int{},
-		Twoots:     []int{},
 	}
 	db.Users = append(db.Users, tempUser)
 	db.umut.Unlock()
@@ -338,7 +320,6 @@ func AddTwoot(author int, body string, db *MemDB) int {
 		Created: time.Now(),
 	}
 
-	tempAuth.Twoots = append(tempAuth.Twoots, tempTwoot.ID)
 	tempAuth.mut.Unlock()
 	db.Twoots = append(db.Twoots, tempTwoot)
 	db.tmut.Unlock()
@@ -377,10 +358,10 @@ func SortTwoots(list *[]*Twoot, db *MemDB) {
 	fmt.Println("sorted twoots")
 }
 
-//	Used to remove a Twoot from the DB given it's ID
+//	Used to remove a Twoot from the DB given its ID
 func DeleteTwoot(dID int, db *MemDB) {
-	fmt.Printf("looking for Twoot: %d\n", dID)
 	db.tmut.Lock()
+	fmt.Printf("looking for Twoot: %d\n", dID)
 	if dID >= 0 && dID < len(db.Twoots) {
 		if db.Twoots[dID].ID == dID {
 			fmt.Printf("deleting twoot: \n%s\n", db.Twoots[dID])
@@ -389,15 +370,18 @@ func DeleteTwoot(dID int, db *MemDB) {
 			db.Twoots[len(db.Twoots)-1] = nil
 			db.Twoots = db.Twoots[:len(db.Twoots)-1]
 
+			SortTwoots(&db.Twoots, db)
+
+			fmt.Printf("Data/Twoots/%d.txt", len(db.Twoots))
 			err := os.Remove(fmt.Sprintf("Data/Twoots/%d.txt", len(db.Twoots)))
 			if err != nil {
 				fmt.Println(err)
 			}
+
+			db.WriteTwoots()
 		}
-		SortTwoots(&db.Twoots, db)
 	}
 	db.tmut.Unlock()
-	db.WriteDB()
 }
 
 //	Used to remove a User from the DB given their ID
@@ -410,26 +394,39 @@ func DeleteUser(delID int, db *MemDB) {
 			if x.ID == delID {
 				x.mut.Lock()
 				fmt.Printf("deleting user: %s\n", x.Name)
-				for _, y := range x.Twoots {
-					DeleteTwoot(y, db)
+				var s = len(db.Twoots)
+				for t := 0; t < s; t++ {
+					if db.Twoots[t].Author == x.ID {
+						DeleteTwoot(db.Twoots[t].ID, db)
+						t--
+						s--
+					} else if db.Twoots[t].Author > delID {
+						db.Twoots[t].Author--
+					}
 				}
 				x.mut.Unlock()
+
+				for t := delID+1; t < len(db.Users); t++ {
+					db.Users[t].ID--
+				}
 
 				copy(db.Users[i:], db.Users[i+1:])
 				db.Users[len(db.Users)-1] = nil
 				db.Users = db.Users[:len(db.Users)-1]
 
-				err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", len(db.Users)))
+				err := os.Remove(fmt.Sprintf("Data/Users/%d.txt", x.ID))
 				if err != nil {
 					fmt.Println(err)
 				}
+				break
 			} else {
 				if GetID(x.FollowList, delID) != -1 {
 					Unfollow(x.ID, delID, db)
 				}
 			}
-			db.umut.Unlock()
 		}
+		db.umut.Unlock()
+		db.WriteDB()
 	}
 }
 
@@ -543,7 +540,7 @@ func handleConnection(Connect net.Conn, db *MemDB) {
 			fmt.Fprintln(Connect, "Done")
 		case "DeleteUser":
 			ind, _ := strconv.Atoi(args[1])
-			DeleteUser(ind, db)
+			go DeleteUser(ind, db)
 			fmt.Fprintln(Connect, "Done")
 		case "Follow":
 			ind1, _ := strconv.Atoi(args[1])

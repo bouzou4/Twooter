@@ -27,7 +27,6 @@ type User struct {
 	Pass       string
 	Color      string
 	FollowList []int
-	Twoots     []int
 }
 
 //basic twoot struct for representing twoots
@@ -65,7 +64,6 @@ func ParseUser(msg string) *User {
 	p1, _ := strconv.Atoi(lines[0])
 
 	var p5 = []int{}
-	var p6 = []int{}
 
 	if lines[4] != "" {
 		follows := strings.Split(lines[4], " ")
@@ -80,14 +78,9 @@ func ParseUser(msg string) *User {
 	if lines[5] != "" {
 		twoots := strings.Split(lines[5], " ")
 		twoots = twoots[:len(twoots)-1]
-
-		for _, x := range twoots {
-			y, _ := strconv.Atoi(x)
-			p6 = append(p6, y)
-		}
 	}
 
-	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5, Twoots: p6}
+	return &User{ID: p1, Name: lines[1], Pass: lines[2], Color: lines[3], FollowList: p5}
 }
 
 // 	takes serialized string from app server and creates pointer to twoot object
